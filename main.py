@@ -1,3 +1,4 @@
+
 def dictionary_operations(fruit_prices: dict, fruits: list):
     # add the fruit fruits[0] to fruit_prices with cost 3
     fruit_prices[fruits[0]] = 3
@@ -9,10 +10,6 @@ def dictionary_operations(fruit_prices: dict, fruits: list):
 
     # increase the cost of fruits[2] by 2 in fruit_prices
     fruit_prices[fruits[2]] += 2
-    order_print(fruit_prices)
-    # check if fruits[3] exists, add with value 4 if it doesn't
-    if fruits[3] not in fruit_prices:
-        fruit_prices[fruits[3]] = 4
     order_print(fruit_prices)
 
     # delete both key and value for fruits[3] from fruit_prices
