@@ -18,8 +18,7 @@ def dictionary_operations(fruit_prices: dict, fruits: list):
     order_print(fruit_prices)
 
     # print the price of fruits[4]
-    if fruits[4] in fruit_prices:
-        print(fruit_prices[fruits[4]])
+    print(fruit_prices[fruits[4]])
 
     # print the names of fruits in fruit prices as a list sorted in ascending order
     print(sorted(fruit_prices.keys()))
