@@ -1,14 +1,27 @@
 import { useState } from 'react'
-import { Link2, Upload } from 'lucide-react'
+import { Link2, Upload, CheckCircle, AlertCircle } from 'lucide-react'
+import { trackProduct } from '../services/api'
 
 export default function AddProduct() {
   const [productUrl, setProductUrl] = useState('')
   const [productFile, setProductFile] = useState<File | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log('Tracking product:', productUrl)
-    // TODO: Implement API call
+    setIsLoading(true)
+    setMessage(null)
+    
+    try {
+      await trackProduct(productUrl)
+      setMessage({ type: 'success', text: 'Product added successfully! Scraping will begin shortly.' })
+      setProductUrl('')
+    } catch (error: any) {
+      setMessage({ type: 'error', text: error.response?.data?.detail || 'Failed to add product. Please try again.' })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const suggestedSites = [
@@ -36,6 +49,14 @@ export default function AddProduct() {
       {/* Add Product Form */}
       <div className="card">
         <form onSubmit={handleSubmit} className="space-y-6">
+          {message && (
+            <div className={`p-4 rounded-lg flex items-center space-x-2 ${
+              message.type === 'success' ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300' : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'
+            }`}>
+              {message.type === 'success' ? <CheckCircle className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+              <span>{message.text}</span>
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium mb-2">Product URL</label>
             <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
@@ -50,6 +71,7 @@ export default function AddProduct() {
                 placeholder="https://www.amazon.in/product/..."
                 className="input pl-10"
                 required
+                disabled={isLoading}
               />
             </div>
           </div>
@@ -77,8 +99,8 @@ export default function AddProduct() {
             </div>
           </div>
 
-          <button type="submit" className="btn-primary w-full">
-            Track Product
+          <button type="submit" className="btn-primary w-full" disabled={isLoading}>
+            {isLoading ? 'Adding Product...' : 'Track Product'}
           </button>
         </form>
       </div>

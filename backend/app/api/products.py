@@ -1,11 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
+from urllib.parse import urlparse
 from ..database import get_db
 from ..schemas.product import ProductCreate, ProductResponse, ProductDetail
 from ..schemas.price import PriceHistory
 from ..crud import products as crud_products
 from ..crud import prices as crud_prices
+from ..models import Source, ProductSource
+from ..utils.scraper_queue import enqueue_scrape
 
 router = APIRouter()
 
@@ -13,7 +16,37 @@ router = APIRouter()
 @router.post("/track", response_model=ProductResponse)
 async def track_product(product: ProductCreate, db: Session = Depends(get_db)):
     """Add a new product to track by URL"""
+    # Create product
     db_product = crud_products.create_product(db, product)
+    
+    # Extract domain from URL
+    parsed_url = urlparse(product.url)
+    domain = parsed_url.netloc.replace('www.', '')
+    
+    # Create or get source
+    source = db.query(Source).filter(Source.domain == domain).first()
+    if not source:
+        site_name = domain.split('.')[0].title()
+        source = Source(domain=domain, site_name=site_name, trust_score=50.0)
+        db.add(source)
+        db.commit()
+        db.refresh(source)
+    
+    # Create product source link
+    product_source = ProductSource(
+        product_id=db_product.id,
+        source_id=source.id,
+        url=product.url
+    )
+    db.add(product_source)
+    db.commit()
+    
+    # Enqueue scraping job
+    try:
+        enqueue_scrape(product.url, db_product.id, source.id)
+    except Exception as e:
+        print(f"Failed to enqueue scrape job: {e}")
+    
     return db_product
 
 
