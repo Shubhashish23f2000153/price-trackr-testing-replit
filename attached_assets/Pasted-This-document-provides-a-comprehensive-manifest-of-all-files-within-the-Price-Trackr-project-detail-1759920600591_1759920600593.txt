@@ -1,0 +1,219 @@
+This document provides a comprehensive manifest of all files within the Price Trackr project, detailing the title, filename, and type for each.
+
+Root Directory
+Title: Environment Variables Example
+File Name: .env.example
+File Type: Environment file (.env)
+
+Title: Git Ignore Rules
+File Name: .gitignore
+File Type: Ignore file (.gitignore)
+
+Title: Project README
+File Name: README.md
+File Type: Markdown (.md)
+
+Title: Project License
+File Name: LICENSE
+File Type: Text file
+
+Title: VS Code Workspace Configuration
+File Name: price-trackr.code-workspace
+File Type: JSON (.code-workspace)
+
+Backend (backend/)
+Title: Backend Dockerfile
+File Name: Dockerfile
+File Type: Dockerfile
+
+Title: Backend Python Dependencies
+File Name: requirements.txt
+File Type: Text (.txt)
+
+Title: Alembic Database Migration Config
+File Name: alembic.ini
+File Type: INI Config (.ini)
+
+Application (backend/app/)
+Title: Main Application Entrypoint
+File Name: main.py
+File Type: Python (.py)
+
+Title: Environment & Global Config Loader
+File Name: config.py
+File Type: Python (.py)
+
+Title: Database Connection & Session
+File Name: database.py
+File Type: Python (.py)
+
+Models (backend/app/models/)
+Title: Product Data Model
+File Name: product.py
+File Type: Python (.py)
+
+Title: User Data Model
+File Name: user.py
+File Type: Python (.py)
+
+Title: Price Log Data Model
+File Name: price_log.py
+File Type: Python (.py)
+
+Schemas (backend/app/schemas/)
+Title: Product Pydantic Schema
+File Name: product_schema.py
+File Type: Python (.py)
+
+Title: User Pydantic Schema
+File Name: user_schema.py
+File Type: Python (.py)
+
+Title: Price Pydantic Schema
+File Name: price_schema.py
+File Type: Python (.py)
+
+CRUD (backend/app/crud/)
+Title: Product Database Logic
+File Name: products.py
+File Type: Python (.py)
+
+Title: User Database Logic
+File Name: users.py
+File Type: Python (.py)
+
+Title: Price Database Logic
+File Name: prices.py
+File Type: Python (.py)
+
+API Endpoints (backend/app/api/)
+Title: API Router Initializer
+File Name: _init_.py
+File Type: Python (.py)
+
+Title: Products API Router
+File Name: products.py
+File Type: Python (.py)
+
+Title: Alerts API Router
+File Name: alerts.py
+File Type: Python (.py)
+
+Title: Users API Router
+File Name: users.py
+File Type: Python (.py)
+
+Title: Sales API Router
+File Name: sales.py
+File Type: Python (.py)
+
+Frontend (frontend/)
+Title: Frontend Dockerfile
+File Name: Dockerfile
+File Type: Dockerfile
+
+Title: Frontend Project Dependencies
+File Name: package.json
+File Type: JSON (.json)
+
+Title: Vite Build Configuration
+File Name: vite.config.ts
+File Type: TypeScript (.ts)
+
+Title: Tailwind CSS Configuration
+File Name: tailwind.config.js
+File Type: JavaScript (.js)
+
+Title: PostCSS Configuration
+File Name: postcss.config.js
+File Type: JavaScript (.js)
+
+Title: Main HTML Entrypoint
+File Name: index.html
+File Type: HTML (.html)
+
+Source (frontend/src/)
+Title: Main React Application Mount
+File Name: main.tsx
+File Type: TypeScript JSX (.tsx)
+
+Title: Root Application Component & Router
+File Name: App.tsx
+File Type: TypeScript JSX (.tsx)
+
+Title: Global CSS Styles
+File Name: index.css
+File Type: CSS (.css)
+
+Pages (frontend/src/pages/)
+Title: Dashboard Page
+File Name: Dashboard.tsx
+File Type: TypeScript JSX (.tsx)
+
+Title: Watchlist Page
+File Name: Watchlist.tsx
+File Type: TypeScript JSX (.tsx)
+
+Title: Add Product Page
+File Name: AddProduct.tsx
+File Type: TypeScript JSX (.tsx)
+
+Title: Sales Page
+File Name: Sales.tsx
+File Type: TypeScript JSX (.tsx)
+
+Title: Settings Page
+File Name: Settings.tsx
+File Type: TypeScript JSX (.tsx)
+
+Worker (worker/)
+Title: Worker Dockerfile
+File Name: Dockerfile
+File Type: Dockerfile
+
+Title: Worker Python Dependencies
+File Name: requirements.txt
+File Type: Text (.txt)
+
+Scraper (worker/playwright_scraper/)
+Title: Base Scraper Class/Template
+File Name: base_scraper.py
+File Type: Python (.py)
+
+Title: RQ Worker Runner
+File Name: runner.py
+File Type: Python (.py)
+
+Infrastructure (infra/)
+Title: Docker Compose Stack Definition
+File Name: docker-compose.yml
+File Type: YAML (.yml)
+
+Title: Nginx Reverse Proxy Configuration
+File Name: nginx/site.conf
+File Type: Nginx Config (.conf)
+
+Title: Systemd Service Unit
+File Name: systemd/price-trackr.service
+File Type: Systemd Unit (.service)
+
+Documentation (docs/)
+Title: System Architecture Overview
+File Name: system-architecture.md
+File Type: Markdown (.md)
+
+Title: API Reference
+File Name: api-reference.md
+File Type: Markdown (.md)
+
+Title: Scraper Development Guide
+File Name: scraper-guide.md
+File Type: Markdown (.md)
+
+Title: Deployment Guide
+File Name: deployment-guide.md
+File Type: Markdown (.md)
+
+Title: Project Roadmap
+File Name: roadmap.md
+File Type: Markdown (.md)

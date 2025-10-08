@@ -1,0 +1,94 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: pricetrackr-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pricetrackr}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pricetrackr_password}
+      POSTGRES_DB: ${POSTGRES_DB:-pricetrackr}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - pricetrackr-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pricetrackr"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: pricetrackr-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - pricetrackr-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: pricetrackr-backend
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-pricetrackr}:${POSTGRES_PASSWORD:-pricetrackr_password}@postgres:5432/${POSTGRES_DB:-pricetrackr}
+      REDIS_URL: redis://redis:6379/0
+      CORS_ORIGINS: http://localhost:5000,http://localhost:3000
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - pricetrackr-network
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ../worker
+      dockerfile: Dockerfile
+    container_name: pricetrackr-worker
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: postgresql://${POSTGRES_USER:-pricetrackr}:${POSTGRES_PASSWORD:-pricetrackr_password}@postgres:5432/${POSTGRES_DB:-pricetrackr}
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - pricetrackr-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: pricetrackr-frontend
+    ports:
+      - "5000:80"
+    depends_on:
+      - backend
+    networks:
+      - pricetrackr-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  pricetrackr-network:
+    driver: bridge

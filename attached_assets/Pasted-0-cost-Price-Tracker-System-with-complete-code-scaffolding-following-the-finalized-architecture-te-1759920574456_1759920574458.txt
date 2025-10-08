@@ -1,0 +1,417 @@
+0-cost Price Tracker System with complete code scaffolding, following the finalized architecture, tech stack, and behavior outlined below.
+Everything should be production-structured, modular, documented, and designed for self-hosted VPS deployment using Docker Compose — no paid APIs, no licensing traps, no cloud dependencies.
+
+
+---
+
+🧠 GENERAL DESCRIPTION
+
+Build a cross-platform global price tracker that:
+
+Tracks, compares, and stores product prices across multiple e-commerce sites.
+
+Works in real time and per location/timezone.
+
+Supports online and offline pricing, watchlists, scam detection, and sale awareness.
+
+Functions as both PWA and browser extension, with optional Flutter app support.
+
+Runs entirely on a self-hosted VPS with FastAPI backend + React frontend + Playwright scraper engine.
+
+Costs ₹0 to operate and maintain.
+
+
+
+---
+
+🏗 SYSTEM ARCHITECTURE
+
+Components:
+
+1. Frontend (Web App): React + Vite + Tailwind (PWA-ready)
+
+
+2. Browser Extension: Manifest v3 + JS overlay integration
+
+
+3. Mobile/Desktop App: Flutter (cross-platform)
+
+
+4. Backend API: FastAPI (Python)
+
+
+5. Scraper Workers: Playwright + BeautifulSoup
+
+
+6. Database: PostgreSQL
+
+
+7. Cache / Queue / PubSub: Redis
+
+
+8. Proxy + SSL: Nginx + Certbot
+
+
+9. Deployment Orchestration: Docker Compose
+
+
+10. Version Control / CI: GitHub + GitHub Actions (free tier)
+
+
+
+
+---
+
+📂 DIRECTORY STRUCTURE
+
+price-tracker/
+├─ backend/
+│  ├─ app/
+│  │  ├─ main.py
+│  │  ├─ api/
+│  │  │  ├─ endpoints.py
+│  │  ├─ models.py
+│  │  ├─ db.py
+│  │  ├─ websocket.py
+│  │  ├─ utils/
+│  │  └─ workers/
+│  │     └─ tasks.py
+│  ├─ Dockerfile
+│  └─ requirements.txt
+├─ worker/
+│  ├─ playwright_scraper/
+│  │  ├─ scrapers/
+│  │  │  ├─ amazon.py
+│  │  │  ├─ flipkart.py
+│  │  ├─ runner.py
+│  ├─ Dockerfile
+│  └─ requirements.txt
+├─ frontend/
+│  ├─ src/
+│  ├─ vite.config.ts
+│  ├─ package.json
+│  ├─ Dockerfile
+│  └─ README.md
+├─ extension/
+│  ├─ manifest.json
+│  ├─ content_script.js
+│  └─ background.js
+├─ infra/
+│  ├─ docker-compose.yml
+│  ├─ nginx/
+│  │  └─ site.conf
+│  ├─ certbot/
+│  └─ systemd/
+│     └─ price-tracker.service
+└─ README.md
+
+
+---
+
+⚙ TECHNICAL DETAILS
+
+Backend:
+
+FastAPI (REST + WebSocket)
+
+SQLAlchemy + Alembic migrations
+
+Redis Queue (RQ) for worker tasks
+
+CORS-enabled for PWA + Extension access
+
+
+Frontend:
+
+React + Vite + Tailwind
+
+Dual-mode UI (simple/geek)
+
+Live WebSocket updates
+
+Watchlist, product cards, history graph
+
+IndexedDB offline cache via Workbox
+
+
+Worker:
+
+Playwright (Chromium, headless)
+
+BeautifulSoup fallback
+
+Modular site scrapers with normalization logic
+
+Randomized UA + polite scraping delays
+
+Retry + backoff for failed sites
+
+
+Database Models:
+
+products(id, title, sku, brand)
+sources(id, domain, site_name, trust_score)
+product_sources(product_id, source_id, url)
+price_history(id, product_source_id, price_cents, currency, availability, scraped_at)
+watchlists(user_id, product_id, alert_rules)
+scam_scores(domain, whois_days_old, safe_browsing_flag, trust_signals)
+
+API Endpoints:
+
+POST /api/track → Add new product by URL
+
+GET /api/product/{id} → Retrieve product data + history
+
+GET /api/watchlist → Fetch user’s tracked products
+
+POST /api/watchlist → Add/update watchlist
+
+GET /api/scamcheck?domain=... → Check scam risk
+
+GET /api/sales → List ongoing sales per region
+
+WS /ws/updates → Real-time updates
+
+
+Realtime:
+
+Redis pub/sub → FastAPI WebSocket → frontend live price card updates
+
+
+Alerts:
+
+Triggered on threshold breaches
+
+WebPush (VAPID) notifications
+
+WS push + local PWA notification fallback
+
+
+
+---
+
+🧮 DATA HANDLING
+
+Normalize all prices to minor currency units (paise, cents, etc.)
+
+Store all timestamps as UTC → convert to user’s local time via frontend
+
+Maintain historical price data for chart rendering
+
+Compress old data weekly to save space
+
+Detect fake/inflated prices using median deviation logic
+
+
+
+---
+
+🧱 DEPLOYMENT DETAILS
+
+Server:
+
+Ubuntu LTS VPS
+
+Minimum 2vCPU, 4GB RAM, 50GB SSD
+
+
+Docker Compose Stack:
+
+PostgreSQL
+
+Redis
+
+Backend (FastAPI)
+
+Worker (Playwright)
+
+Frontend (React)
+
+Nginx Reverse Proxy
+
+
+Systemd Service:
+
+[Unit]
+Description=Price Tracker
+After=docker.service
+Requires=docker.service
+
+[Service]
+WorkingDirectory=/opt/price-tracker
+ExecStart=/usr/bin/docker compose up -d
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+
+SSL:
+
+Certbot auto-renew
+
+Nginx proxy routes:
+
+example.com → frontend
+
+api.example.com → backend
+
+ws.example.com → WebSocket
+
+
+
+Backups:
+
+Daily pg_dump
+
+Weekly data aggregation
+
+
+
+---
+
+⚔ SCRAPER DESIGN
+
+Each scraper = isolated module under /worker/playwright_scraper/scrapers
+
+Example: amazon.py, flipkart.py, bestbuy.py
+
+Returns structured JSON:
+
+
+{
+  "title": "...",
+  "price": 74999,
+  "currency": "INR",
+  "availability": "In Stock",
+  "url": "https://..."
+}
+
+Dynamic detection (Playwright)
+
+Fallback static HTML parser (BeautifulSoup)
+
+Rate-limit and rotate headers
+
+Detect CAPTCHAs → skip and retry later
+
+
+
+---
+
+🔍 SECURITY & ETHICS
+
+No CAPTCHA solvers
+
+No paid proxies
+
+Respect robots.txt where applicable
+
+Always show data source
+
+Include disclaimer: “Data collected from publicly visible information only.”
+
+Sanitize URLs, enforce CORS, validate input
+
+
+
+---
+
+🌐 FEATURES (MVP SCOPE)
+
+✅ Add product by URL
+✅ Track live prices across at least 3 websites
+✅ Display historical chart
+✅ Show “lowest ever price”
+✅ Region-based sale awareness
+✅ Scam score & trust meter
+✅ Real-time watchlist alerts
+✅ Works offline (PWA cache)
+✅ Live extension overlay
+✅ Hosted & secured on VPS
+✅ Zero paid dependencies
+
+
+---
+
+💡 FUTURE ADD-ONS
+
+AI-based price forecasting
+
+Telegram/email notifications
+
+Crowdsourced offline prices
+
+User accounts + analytics
+
+Community “deal discussions”
+
+Theme switcher + customization
+
+
+
+---
+
+🧰 DELIVERABLES TO GENERATE
+
+1. Folder structure (as shown).
+
+
+2. Backend boilerplate (FastAPI + DB + Redis setup).
+
+
+3. Worker (Playwright example + Redis consumer).
+
+
+4. Frontend (React + Tailwind + WebSocket + sample product page).
+
+
+5. Dockerfiles (backend, worker, frontend).
+
+
+6. docker-compose.yml (full stack).
+
+
+7. Nginx config (reverse proxy setup).
+
+
+8. README.md (setup, deploy, run instructions).
+
+
+9. Optional: Flutter boilerplate link for later expansion.
+
+
+
+
+---
+
+🧭 INSTRUCTIONS TO MODEL
+
+Generate:
+
+Production-grade folder & code scaffolding
+
+Minimal dummy scraper examples (Amazon, Flipkart)
+
+Working WebSocket connection for updates
+
+Docker-compose setup for one-command deployment
+
+Clean code comments & setup docs
+
+
+Do NOT:
+
+Use any paid service, third-party API key, or premium proxy
+
+Include sample credentials in plain text
+
+Skip README, Dockerfiles, or directory structure
+
+
+
+---
+
+Final Note:
+This entire build should stand as an open-source proof-of-concept that a globally functional, intelligent price tracker can be built for ₹0 using only free, open-source tech and one VPS.
+
+I'll follow up with the suggestions for ui later
