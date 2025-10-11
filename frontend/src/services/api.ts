@@ -114,10 +114,17 @@ export const removeFromWatchlist = async (watchlistId: number) => {
 };
 
 // Sales API
-export const getSales = async (region?: string) => {
-  const response = await api.get<Sale[]>('/sales/', {
-    params: region ? { region } : {},
-  });
+// This is the NEW, CORRECTED code
+export const getSales = async (region?: string, status?: 'ongoing' | 'upcoming') => {
+  const params: { region?: string; status?: string } = {};
+  if (region) {
+    params.region = region;
+  }
+  if (status) {
+    params.status = status;
+  }
+  
+  const response = await api.get<Sale[]>('/sales/', { params });
   return response.data;
 };
 
