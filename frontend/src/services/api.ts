@@ -142,3 +142,9 @@ export const checkScam = async (domain: string) => {
 };
 
 export default api;
+
+// Stats API
+export const getSpaceStats = async () => {
+  const response = await api.get('/stats/space');
+  return response.data;
+};

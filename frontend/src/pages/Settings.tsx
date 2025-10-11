@@ -1,11 +1,27 @@
+import { useState, useEffect } from 'react';
 import { Sun, Bell, Shield, Download } from 'lucide-react';
+import { getSpaceStats } from '../services/api';
 
 interface SettingsProps {
-  darkMode: boolean
-  setDarkMode: (value: boolean) => void
+  darkMode: boolean;
+  setDarkMode: (value: boolean) => void;
 }
 
 export default function Settings({ darkMode, setDarkMode }: SettingsProps) {
+  const [spaceInfo, setSpaceInfo] = useState({ tracked_items: 0, price_points: 0 });
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const stats = await getSpaceStats();
+        setSpaceInfo(stats);
+      } catch (error) {
+        console.error("Failed to fetch space info:", error);
+      }
+    };
+    fetchStats();
+  }, []);
+
   return (
     <div className="space-y-6">
       <div>
@@ -35,18 +51,6 @@ export default function Settings({ darkMode, setDarkMode }: SettingsProps) {
               <option value="dark">Dark</option>
             </select>
           </div>
-          <div className="flex items-center justify-between">
-            <div>
-              {/* ADDED ID TO SPAN */}
-              <span id="compact-mode-label" className="font-medium">Compact Mode</span>
-              <div className="text-sm text-gray-500">Reduce spacing between elements</div>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              {/* LINKED SPAN TO INPUT WITH aria-labelledby */}
-              <input type="checkbox" aria-labelledby="compact-mode-label" className="sr-only peer" />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-black dark:peer-checked:bg-white"></div>
-            </label>
-          </div>
         </div>
       </div>
 
@@ -67,15 +71,22 @@ export default function Settings({ darkMode, setDarkMode }: SettingsProps) {
               <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-black dark:peer-checked:bg-white"></div>
             </label>
           </div>
-          <div className="flex items-center justify-between">
+        </div>
+      </div>
+
+      {/* Privacy & Security */}
+      <div className="card">
+        <h3 className="text-lg font-semibold mb-4 flex items-center space-x-2">
+          <Shield className="w-5 h-5" />
+          <span>Privacy & Security</span>
+        </h3>
+        <div className="space-y-4">
+           <div className="flex items-center justify-between">
             <div>
-              <span id="price-drop-label" className="font-medium">Price Drop Alerts</span>
-              <div className="text-sm text-gray-500">Notify when prices fall below threshold</div>
+              <div className="font-medium">Clear History</div>
+              <div className="text-sm text-gray-500">Remove all price tracking history</div>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" aria-labelledby="price-drop-label" className="sr-only peer" defaultChecked />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-black dark:peer-checked:bg-white"></div>
-            </label>
+            <button className="btn-secondary text-sm">Clear Data</button>
           </div>
         </div>
       </div>
@@ -89,6 +100,7 @@ export default function Settings({ darkMode, setDarkMode }: SettingsProps) {
             <select id="country-select" className="input">
               <option>India - India (₹)</option>
               <option>USA - USA ($)</option>
+              <option>UK - GBP (£)</option>
             </select>
           </div>
           <div>
@@ -96,6 +108,7 @@ export default function Settings({ darkMode, setDarkMode }: SettingsProps) {
             <select id="timezone-select" className="input">
               <option>IST - UTC + 5:30</option>
               <option>PST - UTC - 8:00</option>
+              <option>GMT - UTC + 0:00</option>
             </select>
           </div>
         </div>
@@ -107,11 +120,15 @@ export default function Settings({ darkMode, setDarkMode }: SettingsProps) {
         <div className="space-y-3">
           <div className="flex justify-between text-sm">
             <span className="text-gray-600 dark:text-gray-400">Tracked Items</span>
-            <span className="font-medium">0 items</span>
+            <span className="font-medium">{spaceInfo.tracked_items} items</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-600 dark:text-gray-400">Price Points</span>
+            <span className="font-medium">{spaceInfo.price_points} records</span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-gray-600 dark:text-gray-400">Storage Used</span>
-            <span className="font-medium">0 MB</span>
+            <span className="font-medium">N/A</span>
           </div>
         </div>
         <button className="btn-secondary text-sm w-full mt-4 flex items-center justify-center space-x-2">
@@ -120,5 +137,5 @@ export default function Settings({ darkMode, setDarkMode }: SettingsProps) {
         </button>
       </div>
     </div>
-  )
+  );
 }
