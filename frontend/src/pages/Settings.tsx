@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Sun, Bell, Shield, Download } from 'lucide-react';
 import { getSpaceStats } from '../services/api';
+import { countries, timezones } from '../utils/regionalData'; // Import the new data
 
 interface SettingsProps {
   darkMode: boolean;
@@ -9,6 +10,8 @@ interface SettingsProps {
 
 export default function Settings({ darkMode, setDarkMode }: SettingsProps) {
   const [spaceInfo, setSpaceInfo] = useState({ tracked_items: 0, price_points: 0 });
+  const [selectedCountry, setSelectedCountry] = useState(countries[0].value);
+  const [selectedTimezone, setSelectedTimezone] = useState(timezones[0].value);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -29,92 +32,56 @@ export default function Settings({ darkMode, setDarkMode }: SettingsProps) {
         <p className="text-gray-600 dark:text-gray-400">Configure your price tracking preferences and notifications</p>
       </div>
 
-      {/* Appearance */}
+      {/* Appearance Card */}
       <div className="card">
-        <h3 className="text-lg font-semibold mb-4 flex items-center space-x-2">
-          <Sun className="w-5 h-5" />
-          <span>Appearance</span>
-        </h3>
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <label htmlFor="theme-select" className="font-medium">Theme</label>
-              <div className="text-sm text-gray-500">Choose your preferred theme</div>
-            </div>
-            <select
-              id="theme-select"
-              value={darkMode ? 'dark' : 'light'}
-              onChange={(e) => setDarkMode(e.target.value === 'dark')}
-              className="input w-32"
-            >
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
-            </select>
+        <h3 className="text-lg font-semibold mb-4 flex items-center space-x-2"><Sun className="w-5 h-5" /><span>Appearance</span></h3>
+        <div className="flex items-center justify-between">
+          <div>
+            <label htmlFor="theme-select" className="font-medium">Theme</label>
+            <div className="text-sm text-gray-500">Choose your preferred theme</div>
           </div>
+          <select id="theme-select" value={darkMode ? 'dark' : 'light'} onChange={(e) => setDarkMode(e.target.value === 'dark')} className="input w-32">
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
         </div>
       </div>
 
-      {/* Notifications */}
-      <div className="card">
-        <h3 className="text-lg font-semibold mb-4 flex items-center space-x-2">
-          <Bell className="w-5 h-5" />
-          <span>Notifications</span>
-        </h3>
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <span id="push-label" className="font-medium">Push Notifications</span>
-              <div className="text-sm text-gray-500">Receive browser notifications</div>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" aria-labelledby="push-label" className="sr-only peer" defaultChecked />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-black dark:peer-checked:bg-white"></div>
-            </label>
-          </div>
-        </div>
-      </div>
-
-      {/* Privacy & Security */}
-      <div className="card">
-        <h3 className="text-lg font-semibold mb-4 flex items-center space-x-2">
-          <Shield className="w-5 h-5" />
-          <span>Privacy & Security</span>
-        </h3>
-        <div className="space-y-4">
-           <div className="flex items-center justify-between">
-            <div>
-              <div className="font-medium">Clear History</div>
-              <div className="text-sm text-gray-500">Remove all price tracking history</div>
-            </div>
-            <button className="btn-secondary text-sm">Clear Data</button>
-          </div>
-        </div>
-      </div>
-
-      {/* Regional Settings */}
+      {/* Regional Settings Card */}
       <div className="card">
         <h3 className="text-lg font-semibold mb-4">Regional Settings</h3>
         <div className="space-y-4">
           <div>
             <label htmlFor="country-select" className="block text-sm font-medium mb-2">Country</label>
-            <select id="country-select" className="input">
-              <option>India - India (₹)</option>
-              <option>USA - USA ($)</option>
-              <option>UK - GBP (£)</option>
+            <select id="country-select" className="input" value={selectedCountry} onChange={(e) => setSelectedCountry(e.target.value)}>
+              {countries.map(country => (
+                <option key={country.value} value={country.value}>{country.label}</option>
+              ))}
             </select>
           </div>
           <div>
             <label htmlFor="timezone-select" className="block text-sm font-medium mb-2">Time Zone</label>
-            <select id="timezone-select" className="input">
-              <option>IST - UTC + 5:30</option>
-              <option>PST - UTC - 8:00</option>
-              <option>GMT - UTC + 0:00</option>
+            <select id="timezone-select" className="input" value={selectedTimezone} onChange={(e) => setSelectedTimezone(e.target.value)}>
+              {timezones.map(tz => (
+                <option key={tz.value} value={tz.value}>{tz.label}</option>
+              ))}
             </select>
           </div>
         </div>
       </div>
 
-      {/* Space Information */}
+      {/* Other cards ... */}
+      <div className="card">
+        <h3 className="text-lg font-semibold mb-4 flex items-center space-x-2"><Bell className="w-5 h-5" /><span>Notifications</span></h3>
+        {/* Notification settings go here */}
+      </div>
+
+      <div className="card">
+        <h3 className="text-lg font-semibold mb-4 flex items-center space-x-2"><Shield className="w-5 h-5" /><span>Privacy & Security</span></h3>
+        {/* Privacy settings go here */}
+      </div>
+
+      {/* Space Information Card */}
       <div className="card">
         <h3 className="text-lg font-semibold mb-4">Space Information</h3>
         <div className="space-y-3">
@@ -125,10 +92,6 @@ export default function Settings({ darkMode, setDarkMode }: SettingsProps) {
           <div className="flex justify-between text-sm">
             <span className="text-gray-600 dark:text-gray-400">Price Points</span>
             <span className="font-medium">{spaceInfo.price_points} records</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-600 dark:text-gray-400">Storage Used</span>
-            <span className="font-medium">N/A</span>
           </div>
         </div>
         <button className="btn-secondary text-sm w-full mt-4 flex items-center justify-center space-x-2">
