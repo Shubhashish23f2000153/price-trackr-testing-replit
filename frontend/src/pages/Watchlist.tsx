@@ -1,31 +1,25 @@
-import { useState, useEffect } from 'react'
-import { Heart, ExternalLink } from 'lucide-react'
-import { getWatchlist, getProduct, ProductDetail } from '../services/api'
+import { useState, useEffect } from 'react';
+import { Heart, ExternalLink } from 'lucide-react';
+import { getWatchlist, getProduct, ProductDetail } from '../services/api';
+import { Link } from 'react-router-dom';
 
 export default function Watchlist() {
-  const [watchlistItems, setWatchlistItems] = useState<ProductDetail[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [watchlistItems, setWatchlistItems] = useState<ProductDetail[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchWatchlistData = async () => {
       try {
-        // 1. First, get the list of watchlist entries (which contains product_id)
         const watchlist = await getWatchlist();
-        
-        // 2. Then, create a promise for each product detail fetch
         const productPromises = watchlist.map(item => getProduct(item.product_id));
-
-        // 3. Wait for all product detail promises to resolve
         const detailedProducts = await Promise.all(productPromises);
-
         setWatchlistItems(detailedProducts);
       } catch (error) {
-        console.error("Failed to fetch watchlist data:", error)
+        console.error("Failed to fetch watchlist data:", error);
       } finally {
-        setIsLoading(false)
+        setIsLoading(false);
       }
     };
-
     fetchWatchlistData();
   }, []);
 
@@ -40,8 +34,6 @@ export default function Watchlist() {
         <p className="text-gray-600 dark:text-gray-400">Items you've starred and are tracking in your queue</p>
       </div>
 
-      {/* Note: The stats section below is still using static data. 
-          You would need a dedicated API endpoint to calculate these dynamically. */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="card">
           <span className="text-sm text-gray-600 dark:text-gray-400">Total Products</span>
@@ -49,20 +41,18 @@ export default function Watchlist() {
         </div>
         <div className="card">
           <span className="text-sm text-gray-600 dark:text-gray-400">Price Drops</span>
-          <div className="text-3xl font-bold mt-1">3</div>
+          <div className="text-3xl font-bold mt-1">N/A</div>
         </div>
         <div className="card">
-          <span className="text-sm text-gray-600 dark:text-gray-400">Discount Average</span>
-          <div className="text-3xl font-bold mt-1">₹12,499</div>
+          <span className="text-sm text-gray-600 dark:text-gray-400">Potential Savings</span>
+          <div className="text-3xl font-bold mt-1">N/A</div>
         </div>
       </div>
 
-      {/* Watchlist Items */}
       <div className="space-y-4">
         {watchlistItems.length > 0 ? (
           watchlistItems.map((item) => {
-            // Display the first available price source for simplicity
-            const priceInfo = item.prices[0]; 
+            const priceInfo = item.prices[0];
             return (
               <div key={item.id} className="card flex items-start justify-between">
                 <div className="flex-1">
@@ -88,16 +78,16 @@ export default function Watchlist() {
                   </div>
                 </div>
                 <div className="flex space-x-2">
-                  <button className="btn-secondary text-sm flex items-center space-x-1">
-                    <span>View Deal</span>
-                  </button>
+                  <Link to={`/product/${item.id}`} className="btn-secondary text-sm flex items-center space-x-1">
+                    <span>View Details</span>
+                  </Link>
                   <button className="btn-primary text-sm flex items-center space-x-1">
                     <ExternalLink className="w-4 h-4" />
-                    <span>Get Alert</span>
+                    <span>Set Alert</span>
                   </button>
                 </div>
               </div>
-            )
+            );
           })
         ) : (
           <div className="card text-center py-8">
@@ -107,5 +97,5 @@ export default function Watchlist() {
         )}
       </div>
     </div>
-  )
+  );
 }

@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { TrendingDown, TrendingUp, Package, DollarSign } from 'lucide-react';
 import { getProducts, Product } from '../services/api';
+import { Link } from 'react-router-dom';
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
     totalProducts: 0,
-    totalSaved: 0, // This is a placeholder for now
-    activeDeals: 0,  // This is a placeholder for now
-    priceDrops: 0    // This is a placeholder for now
+    totalSaved: 0,
+    activeDeals: 0,
+    priceDrops: 0
   });
   const [recentActivity, setRecentActivity] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -16,30 +17,20 @@ export default function Dashboard() {
     const fetchDashboardData = async () => {
       try {
         const products = await getProducts();
-        
-        // Update stats with the total number of products
         setStats(prevStats => ({
           ...prevStats,
           totalProducts: products.length,
         }));
-
-        // Sort products by creation date to find the most recent
-        const sortedProducts = [...products].sort((a, b) => 
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
-        
-        // Set the 3 most recently tracked products for the activity feed
+        const sortedProducts = [...products].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
         setRecentActivity(sortedProducts.slice(0, 3));
-
       } catch (error) {
         console.error("Failed to fetch dashboard data:", error);
       } finally {
         setIsLoading(false);
       }
     };
-
     fetchDashboardData();
-  }, []); // Empty array ensures this runs once on mount
+  }, []);
 
   if (isLoading) {
     return <div className="text-center p-8">Loading dashboard...</div>;
@@ -52,7 +43,6 @@ export default function Dashboard() {
         <p className="text-gray-600 dark:text-gray-400">Welcome! Here's what's happening with your tracked items today.</p>
       </div>
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="card">
           <div className="flex items-center justify-between mb-2">
@@ -63,32 +53,31 @@ export default function Dashboard() {
         </div>
         <div className="card">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-600 dark:text-gray-400">You Saved</span>
+            <span className="text-sm text-gray-600 dark:text-gray-400">Potential Savings</span>
             <DollarSign className="w-5 h-5 text-green-500" />
           </div>
-          <div className="text-3xl font-bold">₹{stats.totalSaved.toLocaleString()}</div>
+          <div className="text-3xl font-bold">N/A</div>
         </div>
         <div className="card">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600 dark:text-gray-400">Active Deals</span>
             <TrendingDown className="w-5 h-5 text-orange-500" />
           </div>
-          <div className="text-3xl font-bold">{stats.activeDeals}</div>
+          <div className="text-3xl font-bold">N/A</div>
         </div>
         <div className="card">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600 dark:text-gray-400">Price Drops</span>
             <TrendingUp className="w-5 h-5 text-red-500" />
           </div>
-          <div className="text-3xl font-bold">{stats.priceDrops}</div>
+          <div className="text-3xl font-bold">N/A</div>
         </div>
       </div>
 
-      {/* Recent Activity */}
       <div className="card">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold">Recently Tracked Products</h3>
-          <button className="text-sm text-blue-600 dark:text-blue-400 hover:underline">View All</button>
+          <Link to="/watchlist" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">View All</Link>
         </div>
         <div className="space-y-4">
           {recentActivity.length > 0 ? (
@@ -100,7 +89,9 @@ export default function Dashboard() {
                     Tracked on: {new Date(item.created_at).toLocaleDateString()}
                   </p>
                 </div>
-                <button className="btn-primary text-sm">View Details</button>
+                <Link to={`/product/${item.id}`} className="btn-primary text-sm">
+                  View Details
+                </Link>
               </div>
             ))
           ) : (

@@ -6,6 +6,7 @@ import Watchlist from './pages/Watchlist'
 import AddProduct from './pages/AddProduct'
 import Sales from './pages/Sales'
 import Settings from './pages/Settings'
+import ProductDetail from './pages/ProductDetail'
 
 function App() {
   const [darkMode, setDarkMode] = useState(() => {
@@ -31,6 +32,7 @@ function App() {
           <Route path="/add" element={<AddProduct />} />
           <Route path="/sales" element={<Sales />} />
           <Route path="/settings" element={<Settings darkMode={darkMode} setDarkMode={setDarkMode} />} />
+          <Route path="/product/:productId" element={<ProductDetail />} />
         </Routes>
       </Layout>
     </Router>
