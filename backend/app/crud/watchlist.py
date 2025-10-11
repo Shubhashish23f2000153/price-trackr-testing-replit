@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from ..models import Watchlist
 from ..schemas.watchlist import WatchlistCreate
+from ..schemas.watchlist import WatchlistUpdate
 
 
 def create_watchlist_item(db: Session, watchlist: WatchlistCreate) -> Watchlist:
@@ -33,3 +34,12 @@ def is_in_watchlist(db: Session, product_id: int, user_id: Optional[str] = None)
     if user_id:
         query = query.filter(Watchlist.user_id == user_id)
     return query.first() is not None
+
+def update_watchlist_item(db: Session, watchlist_id: int, watchlist: WatchlistUpdate) -> Optional[Watchlist]:
+    item = db.query(Watchlist).filter(Watchlist.id == watchlist_id).first()
+    if item:
+        item.alert_rules = watchlist.alert_rules
+        db.commit()
+        db.refresh(item)
+        return item
+    return None

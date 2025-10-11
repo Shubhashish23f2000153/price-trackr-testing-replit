@@ -12,6 +12,11 @@ class WatchlistCreate(WatchlistBase):
     user_id: Optional[str] = None
 
 
+# NEW - Schema for updating an alert
+class WatchlistUpdate(BaseModel):
+    alert_rules: Optional[Dict[str, Any]] = None
+
+
 class WatchlistResponse(WatchlistBase):
     id: int
     user_id: Optional[str] = None

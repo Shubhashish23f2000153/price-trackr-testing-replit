@@ -148,3 +148,9 @@ export const getSpaceStats = async () => {
   const response = await api.get('/stats/space');
   return response.data;
 };
+
+export const updateWatchlistAlert = async (watchlistId: number, alertPrice: number) => {
+  const alertRules = { threshold: alertPrice, type: 'below' };
+  const response = await api.put(`/watchlist/${watchlistId}`, { alert_rules: alertRules });
+  return response.data;
+};
