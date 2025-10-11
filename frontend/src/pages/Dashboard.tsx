@@ -1,58 +1,66 @@
-import { useEffect, useState } from 'react'
-import { TrendingDown, TrendingUp, Package, DollarSign } from 'lucide-react'
+import { useEffect, useState } from 'react';
+import { TrendingDown, TrendingUp, Package, DollarSign } from 'lucide-react';
+import { getProducts, Product } from '../services/api';
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
-    totalProducts: 247,
-    totalSaved: 2147,
-    activeDeals: 18,
-    priceDrops: 42
-  })
+    totalProducts: 0,
+    totalSaved: 0, // This is a placeholder for now
+    activeDeals: 0,  // This is a placeholder for now
+    priceDrops: 0    // This is a placeholder for now
+  });
+  const [recentActivity, setRecentActivity] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const [recentActivity, setRecentActivity] = useState([
-    {
-      id: 1,
-      product: "Sony WH-1000XM5 Wireless Industry Leading Noise Canceling Headphones",
-      source: "Amazon",
-      price: 24990,
-      oldPrice: 29990,
-      date: "5/12/2025, 11:42AM - Manual Tracked"
-    },
-    {
-      id: 2,
-      product: "Apple iPhone 14 Pro (256GB) - Natural Titanium",
-      source: "Flipkart",
-      price: 119900,
-      oldPrice: 129900,
-      date: "3/15/2025"
-    },
-    {
-      id: 3,
-      product: "Samsung Galaxy S25 Ultra 5G (Titanium Black, 12GB, 256GB Storage)",
-      source: "Amazon",
-      price: 120999,
-      oldPrice: 134999,
-      date: "4/18/2025"
-    }
-  ])
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        const products = await getProducts();
+        
+        // Update stats with the total number of products
+        setStats(prevStats => ({
+          ...prevStats,
+          totalProducts: products.length,
+        }));
+
+        // Sort products by creation date to find the most recent
+        const sortedProducts = [...products].sort((a, b) => 
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+        
+        // Set the 3 most recently tracked products for the activity feed
+        setRecentActivity(sortedProducts.slice(0, 3));
+
+      } catch (error) {
+        console.error("Failed to fetch dashboard data:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, []); // Empty array ensures this runs once on mount
+
+  if (isLoading) {
+    return <div className="text-center p-8">Loading dashboard...</div>;
+  }
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-semibold mb-2">Dashboard</h2>
-        <p className="text-gray-600 dark:text-gray-400">Welcome! Here's what's happening with your tracked items today</p>
+        <p className="text-gray-600 dark:text-gray-400">Welcome! Here's what's happening with your tracked items today.</p>
       </div>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="card">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-600 dark:text-gray-400">Total Product</span>
+            <span className="text-sm text-gray-600 dark:text-gray-400">Total Products Tracked</span>
             <Package className="w-5 h-5 text-blue-500" />
           </div>
           <div className="text-3xl font-bold">{stats.totalProducts}</div>
         </div>
-
         <div className="card">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600 dark:text-gray-400">You Saved</span>
@@ -60,7 +68,6 @@ export default function Dashboard() {
           </div>
           <div className="text-3xl font-bold">₹{stats.totalSaved.toLocaleString()}</div>
         </div>
-
         <div className="card">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600 dark:text-gray-400">Active Deals</span>
@@ -68,7 +75,6 @@ export default function Dashboard() {
           </div>
           <div className="text-3xl font-bold">{stats.activeDeals}</div>
         </div>
-
         <div className="card">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600 dark:text-gray-400">Price Drops</span>
@@ -81,33 +87,27 @@ export default function Dashboard() {
       {/* Recent Activity */}
       <div className="card">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold">Active Price Alerts</h3>
+          <h3 className="text-lg font-semibold">Recently Tracked Products</h3>
           <button className="text-sm text-blue-600 dark:text-blue-400 hover:underline">View All</button>
         </div>
         <div className="space-y-4">
-          {recentActivity.map((item) => {
-            const discount = ((item.oldPrice - item.price) / item.oldPrice * 100).toFixed(0)
-            return (
+          {recentActivity.length > 0 ? (
+            recentActivity.map((item) => (
               <div key={item.id} className="flex items-start justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
                 <div className="flex-1">
-                  <p className="font-medium text-sm mb-1">{item.product}</p>
-                  <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">{item.date}</p>
-                  <div className="flex items-center space-x-4">
-                    <div>
-                      <span className="text-xs text-gray-500 dark:text-gray-400">Current Price</span>
-                      <p className="text-lg font-bold">₹{item.price.toLocaleString()}</p>
-                    </div>
-                    <div className="text-green-600 dark:text-green-400 text-sm font-medium">
-                      ↓ {discount}% off
-                    </div>
-                  </div>
+                  <p className="font-medium text-sm mb-1">{item.title}</p>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
+                    Tracked on: {new Date(item.created_at).toLocaleDateString()}
+                  </p>
                 </div>
-                <button className="btn-primary text-sm">View Deal</button>
+                <button className="btn-primary text-sm">View Details</button>
               </div>
-            )
-          })}
+            ))
+          ) : (
+            <p className="text-sm text-gray-500">No recent activity. Add a product to get started!</p>
+          )}
         </div>
       </div>
     </div>
-  )
+  );
 }
