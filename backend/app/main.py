@@ -12,15 +12,16 @@ app = FastAPI(
 )
 
 # CORS Configuration
+# Use this list of allowed origins
 origins = [
     "http://localhost:5000",
     "http://localhost:3000",
-    "chrome-extension://dldibmjmdmlnihpoadllbmnagdbeomi" # Your specific extension ID
+    "chrome-extension://dldibmjmdmlnihpoadllbmnagdbeomi" # Your specific extension ID from the error message
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,  # <-- CHANGE THIS: Use the 'origins' list instead of ["*"]
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
