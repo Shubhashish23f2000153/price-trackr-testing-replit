@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PriceTrackr</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="../icons/icon48.png" alt="PriceTrackr Logo" class="logo">
+            <h1>PriceTrackr</h1>
+        </div>
+        <div id="product-info" class="product-info">
+            <p id="loading-message">Checking for a product on this page...</p>
+            <h2 id="product-title" class="hidden"></h2>
+            <p id="product-price" class="hidden"></p>
+        </div>
+        <button id="track-button" class="btn hidden">Track This Product</button>
+        <div id="status-message" class="status-message"></div>
+    </div>
+    <script src="popup.js"></script>
+</body>
+</html>
