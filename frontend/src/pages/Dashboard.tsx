@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
 import { TrendingDown, TrendingUp, Package, DollarSign } from 'lucide-react';
-import { getProducts, Product } from '../services/api';
+import { getProducts, getDashboardStats, Product } from '../services/api';
 import { Link } from 'react-router-dom';
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
-    totalProducts: 0,
-    totalSaved: 0,
-    activeDeals: 0,
-    priceDrops: 0
+    total_products: 0,
+    total_saved: 0,
+    active_deals: 0,
+    price_drops: 0
   });
   const [recentActivity, setRecentActivity] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -16,19 +16,24 @@ export default function Dashboard() {
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        const products = await getProducts();
-        setStats(prevStats => ({
-          ...prevStats,
-          totalProducts: products.length,
-        }));
+        // Fetch stats and recent products in parallel
+        const statsPromise = getDashboardStats();
+        const productsPromise = getProducts();
+        
+        const [statsData, products] = await Promise.all([statsPromise, productsPromise]);
+        
+        setStats(statsData);
+
         const sortedProducts = [...products].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
         setRecentActivity(sortedProducts.slice(0, 3));
+
       } catch (error) {
         console.error("Failed to fetch dashboard data:", error);
       } finally {
         setIsLoading(false);
       }
     };
+
     fetchDashboardData();
   }, []);
 
@@ -49,28 +54,28 @@ export default function Dashboard() {
             <span className="text-sm text-gray-600 dark:text-gray-400">Total Products Tracked</span>
             <Package className="w-5 h-5 text-blue-500" />
           </div>
-          <div className="text-3xl font-bold">{stats.totalProducts}</div>
+          <div className="text-3xl font-bold">{stats.total_products}</div>
         </div>
         <div className="card">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600 dark:text-gray-400">Potential Savings</span>
             <DollarSign className="w-5 h-5 text-green-500" />
           </div>
-          <div className="text-3xl font-bold">N/A</div>
+          <div className="text-3xl font-bold">₹{stats.total_saved.toLocaleString()}</div>
         </div>
         <div className="card">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600 dark:text-gray-400">Active Deals</span>
             <TrendingDown className="w-5 h-5 text-orange-500" />
           </div>
-          <div className="text-3xl font-bold">N/A</div>
+          <div className="text-3xl font-bold">{stats.active_deals}</div>
         </div>
         <div className="card">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-600 dark:text-gray-400">Price Drops</span>
+            <span className="text-sm text-gray-600 dark:text-gray-400">Price Drops Today</span>
             <TrendingUp className="w-5 h-5 text-red-500" />
           </div>
-          <div className="text-3xl font-bold">N/A</div>
+          <div className="text-3xl font-bold">{stats.price_drops}</div>
         </div>
       </div>
 

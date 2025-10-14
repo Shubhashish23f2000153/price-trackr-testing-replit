@@ -11,17 +11,10 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS Configuration
-# Use this list of allowed origins
-origins = [
-    "http://localhost:5000",
-    "http://localhost:3000",
-    "chrome-extension://dldibmjmdmlnihpoadllbmnagdbeomi" # Your specific extension ID from the error message
-]
-
+# CORS Configuration (Using the "wide open" policy for development)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,  # <-- CHANGE THIS: Use the 'origins' list instead of ["*"]
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -63,3 +56,5 @@ async def websocket_endpoint(websocket: WebSocket):
             await manager.send_personal_message(f"Received: {data}", websocket)
     except WebSocketDisconnect:
         manager.disconnect(websocket)
+
+# The incorrect @app.after_request block has been removed.

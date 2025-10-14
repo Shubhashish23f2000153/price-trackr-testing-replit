@@ -154,3 +154,9 @@ export const updateWatchlistAlert = async (watchlistId: number, alertPrice: numb
   const response = await api.put(`/watchlist/${watchlistId}`, { alert_rules: alertRules });
   return response.data;
 };
+
+// Stats API
+export const getDashboardStats = async () => {
+  const response = await api.get('/stats/dashboard');
+  return response.data;
+};

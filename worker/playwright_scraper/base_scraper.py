@@ -35,7 +35,7 @@ class BaseScraper(ABC):
                 # Random delay before request
                 time.sleep(random.uniform(1, 3))
                 
-                page.goto(self.url, wait_until='networkidle', timeout=30000)
+                page.goto(self.url, wait_until='networkidle', timeout=90000)
                 
                 # Extract data
                 data = self.extract_data(page)

@@ -3,22 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PriceTrackr</title>
+    <title>PriceTrackr Extension</title>
     <link rel="stylesheet" href="popup.css">
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <img src="../icons/icon48.png" alt="PriceTrackr Logo" class="logo">
+            <div class="logo-container">
+                <span class="logo-pt">PT</span>
+            </div>
             <h1>PriceTrackr</h1>
         </div>
-        <div id="product-info" class="product-info">
-            <p id="loading-message">Checking for a product on this page...</p>
-            <h2 id="product-title" class="hidden"></h2>
-            <p id="product-price" class="hidden"></p>
+        
+        <div id="main-content">
+            <div id="product-info" class="product-card">
+                <p id="loading-message">Checking for product on this page...</p>
+                <div id="product-details" class="hidden">
+                    <p class="product-title" id="product-title"></p>
+                    <p class="product-price" id="product-price"></p>
+                </div>
+            </div>
+            <button id="track-button" class="btn btn-primary hidden">Track This Product</button>
         </div>
-        <button id="track-button" class="btn hidden">Track This Product</button>
-        <div id="status-message" class="status-message"></div>
+
+        <div id="status-message" class="status-message hidden"></div>
+
+        <a href="http://localhost:5000" target="_blank" rel="noopener noreferrer" class="view-app-link">
+            Open PriceTrackr App
+        </a>
     </div>
     <script src="popup.js"></script>
 </body>
