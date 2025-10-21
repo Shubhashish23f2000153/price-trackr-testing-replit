@@ -3,39 +3,31 @@ let currentProductInfo = null;
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.type === "PRODUCT_INFO") {
         currentProductInfo = request.product;
-        // No response needed, just storing the data
-        return;
+        return; // No response needed
     }
     
     if (request.type === "GET_PRODUCT_INFO") {
         sendResponse(currentProductInfo);
-        return;
+        return; // Respond immediately
     }
     
     if (request.type === "TRACK_PRODUCT") {
-        // INSTEAD of sender.tab.url, we query for the active tab
+        // Use the correct, modern way to get the active tab's URL
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-            if (tabs.length === 0) {
-                sendResponse({ success: false, message: "Could not find active tab." });
+            if (!tabs.length || !tabs[0].url) {
+                sendResponse({ success: false, message: "Could not find the active tab's URL." });
                 return;
             }
-            const activeTab = tabs[0];
-            const productUrl = activeTab.url;
+            const productUrl = tabs[0].url;
 
-            fetch('http://localhost:8000/api/products/track', {
+            // Send the full data package to the new endpoint
+            fetch('http://localhost:8000/api/products/add-from-extension', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    url: productUrl,
-                    title: request.product.title,
-                }),
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...request.product, url: productUrl }),
             })
             .then(response => {
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
+                if (!response.ok) throw new Error('Network response was not ok');
                 return response.json();
             })
             .then(data => {
@@ -47,7 +39,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             });
         });
         
-        // Return true because we will respond asynchronously
+        // This is crucial: return true to indicate you will respond asynchronously
         return true;
     }
 });

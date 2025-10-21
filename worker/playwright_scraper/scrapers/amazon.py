@@ -7,7 +7,7 @@ from typing import Dict
 class AmazonScraper(BaseScraper):
     def extract_data(self, page: Page) -> Dict:
         """Extract data using Playwright"""
-        title = page.locator('#productTitle').inner_text().strip()
+        title = page.locator('#productTitle').first.inner_text().strip()
         
         # Try multiple price selectors
         price_elem = None
