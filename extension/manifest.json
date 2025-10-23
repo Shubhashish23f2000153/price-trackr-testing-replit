@@ -10,7 +10,11 @@
   ],
   "host_permissions": [
     "*://*.amazon.in/*",
-    "*://*.flipkart.com/*"
+    "*://*.flipkart.com/*",
+    "*://*.myntra.com/*",
+    "*://*.snapdeal.com/*",
+    "*://*.meesho.com/*",
+    "http://localhost:8000/"
   ],
   "action": {
     "default_popup": "popup/popup.html"
@@ -20,11 +24,24 @@
   },
   "content_scripts": [
     {
-      "matches": [
-        "*://*.amazon.in/*",
-        "*://*.flipkart.com/*"
-      ],
-      "js": ["content_script.js"]
+      "matches": ["*://*.amazon.in/*"],
+      "js": ["scrapers/amazon.js"]
+    },
+    {
+      "matches": ["*://*.flipkart.com/*"],
+      "js": ["scrapers/flipkart.js"]
+    },
+    {
+      "matches": ["*://*.myntra.com/*"],
+      "js": ["scrapers/myntra.js"]
+    },
+    {
+      "matches": ["*://*.snapdeal.com/*"],
+      "js": ["scrapers/snapdeal.js"]
+    },
+    {
+      "matches": ["*://*.meesho.com/*"],
+      "js": ["scrapers/meesho.js"]
     }
   ]
 }

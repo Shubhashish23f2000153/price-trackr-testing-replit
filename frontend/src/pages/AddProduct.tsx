@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link2, Upload, CheckCircle, AlertCircle } from 'lucide-react';
+import { Link2, CheckCircle, AlertCircle } from 'lucide-react';
 import { trackProduct } from '../services/api';
 
 export default function AddProduct() {
@@ -30,9 +30,9 @@ export default function AddProduct() {
   const suggestedSites = [
     { name: "Amazon India", domain: "amazon.in", supported: true },
     { name: "Flipkart", domain: "flipkart.com", supported: true },
-    { name: "Myntra", domain: "myntra.com", supported: false },
-    { name: "Snapdeal", domain: "snapdeal.com", supported: false },
-    { name: "Meesho", domain: "meesho.com", supported: false }
+    { name: "Myntra", domain: "myntra.com", supported: true },
+    { name: "Snapdeal", domain: "snapdeal.com", supported: true },
+    { name: "Meesho", domain: "meesho.com", supported: true }
   ];
 
   return (
@@ -56,6 +56,7 @@ export default function AddProduct() {
           )}
           <div>
             <label htmlFor="productUrl" className="block text-sm font-medium mb-2">Product URL</label>
+            {/* THIS IS THE CORRECTED LINE */}
             <div className="relative">
               <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
