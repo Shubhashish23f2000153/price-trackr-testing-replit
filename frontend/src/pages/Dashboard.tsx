@@ -35,27 +35,31 @@ export default function Dashboard() {
     };
 
     fetchDashboardData();
-  }, []);
+  }, []); // Empty array ensures this runs once on mount
 
   if (isLoading) {
     return <div className="text-center p-8">Loading dashboard...</div>;
   }
 
   return (
-    <div className="space-y-6">
+    // Make sure the main div closes correctly
+    <div className="space-y-6"> 
       <div>
         <h2 className="text-2xl font-semibold mb-2">Dashboard</h2>
         <p className="text-gray-600 dark:text-gray-400">Welcome! Here's what's happening with your tracked items today.</p>
       </div>
 
+      {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Card 1 */}
         <div className="card">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600 dark:text-gray-400">Total Products Tracked</span>
             <Package className="w-5 h-5 text-blue-500" />
           </div>
           <div className="text-3xl font-bold">{stats.total_products}</div>
-        </div>
+        </div> 
+        {/* Card 2 */}
         <div className="card">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600 dark:text-gray-400">Potential Savings</span>
@@ -63,6 +67,7 @@ export default function Dashboard() {
           </div>
           <div className="text-3xl font-bold">₹{stats.total_saved.toLocaleString()}</div>
         </div>
+        {/* Card 3 */}
         <div className="card">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600 dark:text-gray-400">Active Deals</span>
@@ -70,6 +75,7 @@ export default function Dashboard() {
           </div>
           <div className="text-3xl font-bold">{stats.active_deals}</div>
         </div>
+        {/* Card 4 */}
         <div className="card">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600 dark:text-gray-400">Price Drops Today</span>
@@ -77,19 +83,20 @@ export default function Dashboard() {
           </div>
           <div className="text-3xl font-bold">{stats.price_drops}</div>
         </div>
-      </div>
+      </div> {/* Closing tag for the stats grid */}
 
+      {/* Recent Activity */}
       <div className="card">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold">Recently Tracked Products</h3>
-          <Link to="/watchlist" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">View All</Link>
+          <Link to="/all-products" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">View All</Link>
         </div>
         <div className="space-y-4">
           {recentActivity.length > 0 ? (
             recentActivity.map((item) => (
               <div key={item.id} className="flex items-start justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
                 <div className="flex-1">
-                  <p className="font-medium text-sm mb-1">{item.title}</p>
+                  <p className="font-medium text-sm mb-1 line-clamp-2">{item.title}</p>
                   <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
                     Tracked on: {new Date(item.created_at).toLocaleDateString()}
                   </p>
@@ -102,8 +109,8 @@ export default function Dashboard() {
           ) : (
             <p className="text-sm text-gray-500">No recent activity. Add a product to get started!</p>
           )}
-        </div>
-      </div>
-    </div>
+        </div> {/* Closing tag for space-y-4 */}
+      </div> {/* Closing tag for recent activity card */}
+    </div> // This should be the final closing tag for the main component div
   );
-}
+} // Closing tag for the Dashboard function

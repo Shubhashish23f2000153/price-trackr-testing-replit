@@ -71,3 +71,9 @@ def get_product_with_prices(db: Session, product_id: int):
             })
     
     return {"product": product, "prices": prices}
+
+def delete_all_products(db: Session) -> int:
+    """Deletes all products from the database and returns the count."""
+    num_deleted = db.query(Product).delete()
+    db.commit() # Make sure this commit is present
+    return num_deleted
