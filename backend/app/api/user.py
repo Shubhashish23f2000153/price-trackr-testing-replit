@@ -1,13 +1,11 @@
-# backend/app/api/user.py
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import timedelta
 
 # Direct imports from schemas, crud, utils, database, config
 from ..database import get_db
-# CORRECTED IMPORT: Import specific schemas from the user schema file
-from ..schemas.user import UserCreate, UserResponse, UserLogin, Token
+# CORRECTED IMPORT: Changed 'user' to 'user_schema' to match your manifest
+from ..schemas.user_schema import UserCreate, UserResponse, UserLogin, Token
 from ..crud import user as user_crud     # Import user crud functions directly
 from ..utils import auth                 # Import auth utils directly
 from ..config import settings            # Import settings directly
