@@ -163,14 +163,9 @@ async def get_price_history(product_id: int, days: int = 30, db: Session = Depen
         for log in history
     ]
 
-
-@router.delete("/{product_id}", status_code=status.HTTP_200_OK)
-async def delete_product(product_id: int, db: Session = Depends(get_db)):
-    """Delete a tracked product."""
-    success = crud_products.delete_product(db, product_id)
-    if not success:
-        raise HTTPException(status_code=404, detail="Product not found")
-    return {"message": "Product deleted successfully"}
+# --- ROUTE ORDER FIX ---
+# The /all route MUST be defined *before* the /{product_id} route
+# to avoid "/all" being interpreted as a product_id.
 
 @router.delete("/all", status_code=status.HTTP_200_OK)
 async def delete_all_tracked_products(db: Session = Depends(get_db)):
@@ -182,3 +177,12 @@ async def delete_all_tracked_products(db: Session = Depends(get_db)):
     except Exception as e:
         print(f"Error deleting all products: {e}") # Log the specific error
         raise HTTPException(status_code=500, detail="Could not delete all products.")
+
+
+@router.delete("/{product_id}", status_code=status.HTTP_200_OK)
+async def delete_product(product_id: int, db: Session = Depends(get_db)):
+    """Delete a tracked product."""
+    success = crud_products.delete_product(db, product_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Product not found")
+    return {"message": "Product deleted successfully"}
