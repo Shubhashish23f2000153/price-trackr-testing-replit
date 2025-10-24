@@ -1,5 +1,5 @@
 // This is the debug message to check if the new script is loading.
-console.log("--- FLIPKART SCRAPER v6 (specific price) IS RUNNING ---");
+console.log("--- FLIPKART SCRAPER v11 (description fix) IS RUNNING ---");
 
 /**
  * Normalizes a price string by removing currency symbols and commas.
@@ -18,11 +18,15 @@ function normalizePrice(priceStr) {
  * @param {object | null} product The product data to send, or null.
  */
 function sendProductInfo(product) {
-  // If a product is found with title and price, send it.
-  // Otherwise, send `null` to clear stale data.
   if (product && product.title && product.currentPrice > 0) {
+    console.log("✅ Found product:", product);
     chrome.runtime.sendMessage({ type: "PRODUCT_INFO", product: product });
   } else {
+    // Log detailed failure reason if possible
+    let failureReason = [];
+    if (!product?.title) failureReason.push("Title missing");
+    if (!product?.currentPrice || product.currentPrice <= 0) failureReason.push("Price missing/invalid");
+    console.log(`❌ Failed to find valid product details. Reasons: [${failureReason.join(', ')}]. Title:`, product?.title, "Price:", product?.currentPrice);
     chrome.runtime.sendMessage({ type: "PRODUCT_INFO", product: null });
   }
 }
@@ -31,54 +35,90 @@ function sendProductInfo(product) {
  * Scrapes the Flipkart product page.
  */
 function scrapeFlipkart() {
+    console.log("🔍 Starting scrapeFlipkart function...");
     let title = '';
-    // A list of all known title selectors.
-    const titleSelectors = [
-        'span.VU-ZEz',   // For laptops and tablets
-        'span.B_NuCI'    // For TVs and other items
-    ];
+    const titleSelectors = ['span.VU-ZEz', 'span.B_NuCI'];
     for (const selector of titleSelectors) {
         const el = document.querySelector(selector);
         if (el) {
             title = el.innerText.trim();
-            break; 
+            console.log(`✅ Found title using selector "${selector}":`, title);
+            break;
+        } else {
+             console.log(`❌ Title selector "${selector}" did not match.`);
         }
     }
+    if (!title) console.log("❌ Could not find title using any selector.");
 
     let priceText = '';
-    // --- THIS LIST IS NOW FIXED ---
-    const priceSelectors = [
-        'div._30jeq3',              // Most common price
-        'div._1vC4OE',             // Older price
-        'div.h10eU > div:first-child' // Specific price for laptops/tablets
-    ];
+    const priceSelectors = ['div._30jeq3', 'div._1vC4OE', 'div.h10eU > div:first-child', 'div.Nx9bqj'];
     for (const selector of priceSelectors) {
         const el = document.querySelector(selector);
         if (el) {
             priceText = el.innerText.trim();
+            console.log(`✅ Found price text using selector "${selector}":`, priceText);
             break;
+        } else {
+            console.log(`❌ Price selector "${selector}" did not match.`);
         }
     }
-    
+     if (!priceText) console.log("❌ Could not find price text using any selector.");
+
     let imageUrl = '';
-    const imageSelectors = ['img._396cs4', 'img._2r_T1E'];
+    const imageSelectors = ['img.DByuf4', 'img._396cs4._2amPTt._3qGmMb', 'img._2r_T1E', 'img.q6DClP'];
      for (const selector of imageSelectors) {
         const el = document.querySelector(selector);
         if (el) {
             imageUrl = el.getAttribute('src');
-            break;
+             if (imageUrl && imageUrl.startsWith('http')) {
+                 console.log(`✅ Found image URL using selector "${selector}"`);
+                 break;
+             } else {
+                  console.log(`⚠️ Found image element with selector "${selector}", but 'src' is missing or invalid: ${imageUrl}`);
+                  imageUrl = '';
+             }
+        } else {
+             console.log(`❌ Image selector "${selector}" did not match.`);
         }
     }
-    
-    const description = document.querySelector('._1mXcCf.RmoJUa p')?.innerText || '';
+    if (!imageUrl) console.log("❌ Could not find image URL using any selector.");
 
-    return { 
-        title, 
-        currentPrice: normalizePrice(priceText), 
-        imageUrl, 
-        brand: '', 
-        description, 
-        source: "Flipkart" 
+    // --- UPDATED DESCRIPTION SELECTOR ---
+    let description = '';
+    const descriptionSelectors = [
+        'div.Xbd0Sd p', // From image_3fd30b.png
+        '._1mXcCf.RmoJUa p', // Old selector as fallback
+        'div._1AN87F' // Common selector for bullet points (might need further processing)
+    ];
+     for (const selector of descriptionSelectors) {
+        const el = document.querySelector(selector);
+        if (el) {
+            // If it's the bullet point div, grab all list items
+            if (selector === 'div._1AN87F') {
+                 const listItems = Array.from(el.querySelectorAll('li._21Ahn-'));
+                 description = listItems.map(li => `• ${li.innerText.trim()}`).join('\n');
+            } else {
+                description = el.innerText.trim();
+            }
+
+            if (description) {
+                 console.log(`✅ Found description using selector "${selector}"`);
+                 break;
+            }
+        } else {
+             console.log(`❌ Description selector "${selector}" did not match.`);
+        }
+    }
+    if (!description) console.log("❌ Could not find description using any selector.");
+    // --- END OF DESCRIPTION UPDATE ---
+
+    return {
+        title,
+        currentPrice: normalizePrice(priceText),
+        imageUrl,
+        brand: '', // Brand still needs a reliable selector
+        description,
+        source: "Flipkart"
     };
 }
 

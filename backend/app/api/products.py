@@ -18,60 +18,106 @@ from ..utils.scraper_queue import enqueue_scrape
 router = APIRouter()
 
 
-@router.post("/add-from-extension", response_model=ProductResponse)
+@router.post("/add-from-extension") # Removed response_model for flexibility
 async def add_product_from_extension(product_data: ProductDataFromExtension, db: Session = Depends(get_db)):
-    """Add a new product with data scraped from the extension."""
+    """Add a new product with data scraped from the extension.
+       Returns the product data and a flag indicating if it was newly created.
+       !! WARNING: This version allows duplicate entries for the same URL !!"""
 
-    existing_product_source = db.query(ProductSource).filter(ProductSource.url == product_data.url).first()
-    if existing_product_source:
-        return existing_product_source.product # Return existing product if URL matches
+    # --- DUPLICATE CHECK REMOVED ---
+    # existing_product_source = db.query(ProductSource).filter(ProductSource.url == product_data.url).first()
+    # if existing_product_source:
+    #     # If it exists, return the existing product and set newly_created to False
+    #     product_dict = {column.name: getattr(existing_product_source.product, column.name) for column in existing_product_source.product.__table__.columns}
+    #     return {**product_dict, "newly_created": False}
+    # --- END OF REMOVED BLOCK ---
 
-    # Create the new product entry
-    new_product = Product( # Now Product is defined
+
+    # --- Create the product entry (this will now happen every time) ---
+    new_product = Product(
         title=product_data.title,
         brand=product_data.brand,
         description=product_data.description,
         image_url=product_data.imageUrl
     )
     db.add(new_product)
-    db.commit()
-    db.refresh(new_product)
+    # Commit here to get the new_product.id
+    try:
+        db.commit()
+        db.refresh(new_product)
+    except Exception as e:
+        db.rollback()
+        print(f"Error creating product: {e}")
+        raise HTTPException(status_code=500, detail="Database error while creating product.")
 
-    # Find or create the source (e.g., Amazon, Flipkart)
+
+    # Find or create the source
     parsed_url = urlparse(product_data.url)
     domain = parsed_url.netloc.replace('www.', '')
     source = db.query(Source).filter(Source.domain == domain).first()
     if not source:
         source = Source(domain=domain, site_name=domain.split('.')[0].title())
         db.add(source)
-        db.commit()
-        db.refresh(source)
+        try:
+            db.commit()
+            db.refresh(source)
+        except Exception as e:
+            db.rollback()
+            # Attempt to delete the product we just created if source fails
+            db.delete(new_product)
+            db.commit()
+            print(f"Error creating source, rolled back product: {e}")
+            raise HTTPException(status_code=500, detail="Database error while creating source.")
 
-    # Link the product to the source via URL
+
+    # Link the product to the source
     product_source = ProductSource(
         product_id=new_product.id,
         source_id=source.id,
         url=product_data.url
     )
     db.add(product_source)
-    # Commit here to generate the product_source.id before creating PriceLog
-    db.commit()
-    db.refresh(product_source)
+    # Commit here to generate the product_source.id
+    try:
+        db.commit()
+        db.refresh(product_source)
+    except Exception as e:
+        db.rollback()
+         # Attempt cleanup
+        if not db.query(ProductSource).filter(ProductSource.product_id == new_product.id).count():
+             db.delete(new_product)
+        db.commit()
+        print(f"Error creating product source, potential rollback: {e}")
+        raise HTTPException(status_code=500, detail="Database error while linking product source.")
 
-    # Add the initial price log from the extension data
-    price_log = PriceLog( # Now PriceLog is defined
+
+    # Add the initial price log
+    price_log = PriceLog(
         product_source_id=product_source.id,
         price_cents=int(product_data.currentPrice * 100),
-        currency="INR", # Assuming INR for now, could make dynamic later
-        in_stock=True # Assuming in stock if extension found price
+        currency="INR", # Assuming INR for now
+        in_stock=True
     )
     db.add(price_log)
 
     # Final commit for the price log
-    db.commit()
-    db.refresh(new_product) # Refresh to get final state
+    try:
+        db.commit()
+        db.refresh(new_product) # Refresh to get final state
+    except Exception as e:
+         db.rollback()
+         # Attempt cleanup
+         if not db.query(PriceLog).filter(PriceLog.product_source_id == product_source.id).count():
+            db.delete(product_source)
+            if not db.query(ProductSource).filter(ProductSource.product_id == new_product.id).count():
+                 db.delete(new_product)
+         db.commit()
+         print(f"Error creating price log, potential rollback: {e}")
+         raise HTTPException(status_code=500, detail="Database error while saving initial price.")
 
-    return new_product
+    # Always return newly_created as True now
+    product_dict = {column.name: getattr(new_product, column.name) for column in new_product.__table__.columns}
+    return {**product_dict, "newly_created": True}
 
 
 @router.post("/track", response_model=ProductResponse)
