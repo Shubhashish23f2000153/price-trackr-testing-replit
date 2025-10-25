@@ -1,31 +1,61 @@
-let currentProductInfo = null;
+// extension/background.js
+let currentProductInfo = null; 
 
-// --- NEW LISTENER TO DETECT SPA NAVIGATION ---
+// List of all supported domains from your manifest
+const supportedDomains = [
+    "amazon.in",
+    "flipkart.com",
+    "myntra.com",
+    "snapdeal.com",
+    "meesho.com"
+];
+
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-    // Check if the URL changed and the tab is a meesho page
-    if (changeInfo.url && tab.url && tab.url.includes("meesho.com")) {
-        // The URL has changed, so the user has likely navigated.
-        // Reset the product info and tell the content script to re-scrape.
-        currentProductInfo = null;
+    // Check if the URL is one we support
+    const isSupported = tab.url && supportedDomains.some(domain => tab.url.includes(domain));
+    if (!isSupported) {
+        return;
+    }
+
+    // We only trigger a scrape, we DO NOT reset the data here.
+    // The content script is responsible for sending new data (or null).
+    if (changeInfo.url || changeInfo.status === 'complete') {
         
-        // Send a message to the content script in that tab
+        if (changeInfo.url) {
+            console.log(`[Background] URL changed in tab ${tabId}. Sending RUN_SCRAPE.`);
+        }
+        if (changeInfo.status === 'complete') {
+            console.log(`[Background] Tab ${tabId} finished loading. Sending RUN_SCRAPE.`);
+        }
+
+        // --- BUG FIX ---
+        // The line "currentProductInfo = null;" has been REMOVED from here.
+        // --- END BUG FIX ---
+        
+        // Send the message to the content script in that tab
         chrome.tabs.sendMessage(tabId, { type: "RUN_SCRAPE" }, (response) => {
             if (chrome.runtime.lastError) {
-                // This error is expected if the content script isn't injected yet on a fresh page
+                // This is normal if the content script isn't injected yet,
+                // it will run its own "Initial Load" scrape anyway.
                 // console.log("Content script not ready yet, or no receiver.");
+            } else {
+                // console.log(`[Background] Content script in tab ${tabId} acknowledged RUN_SCRAPE.`);
             }
         });
     }
 });
-// --- END OF NEW LISTENER ---
+
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.type === "PRODUCT_INFO") {
-        currentProductInfo = request.product;
+        // This is the ONLY place currentProductInfo should be set.
+        currentProductInfo = request.product; 
+        console.log("[Background] Received PRODUCT_INFO. Data is now:", currentProductInfo);
         return; // No response needed
     }
     
     if (request.type === "GET_PRODUCT_INFO") {
+        console.log("[Background] Popup requested data. Sending:", currentProductInfo);
         sendResponse(currentProductInfo);
         return; // Respond immediately
     }
@@ -61,4 +91,5 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         // This is crucial: return true to indicate you will respond asynchronously
         return true;
     }
+    return true; // Keep this true for async message handling
 });
