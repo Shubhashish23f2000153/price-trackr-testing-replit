@@ -1,10 +1,12 @@
 // Debug message to check if script is running
-console.log("--- MEESHO SCRAPER v11 (Scrape Inside Wait - AGAIN) IS RUNNING ---");
+console.log("--- MEESHO SCRAPER v12 (Hybrid Polling) IS RUNNING ---");
 
 // Global variable to store the last known title *successfully scraped*
 let lastSuccessfullyScrapedTitle = "";
 // Flag to prevent multiple scrape attempts per navigation
 let scrapeAttemptedForCurrentNavigation = false;
+// Flag to prevent sending duplicate info if multiple triggers fire
+let hasSentInfoForThisScrape = false;
 
 /**
  * Normalizes a price string by removing currency symbols and commas.
@@ -20,9 +22,12 @@ function normalizePrice(priceStr) {
  * Sends product info (or null) to the background script.
  * Updates lastSuccessfullyScrapedTitle ONLY on success.
  */
-function sendProductInfo(product, context = "Initial Load") {
-  if (window.hasSentInfoForThisScrape) return;
-  window.hasSentInfoForThisScrape = true;
+function sendProductInfo(product, context = "Unknown") {
+  if (hasSentInfoForThisScrape) {
+      // console.log(`(${context}) Blocked duplicate sendProductInfo call.`);
+      return;
+  }
+  hasSentInfoForThisScrape = true; // Set flag immediately
 
   console.log(`(${context}) Sending data to background:`, product);
   chrome.runtime.sendMessage({ type: "PRODUCT_INFO", product: product });
@@ -43,10 +48,9 @@ function sendProductInfo(product, context = "Initial Load") {
  */
 function scrapeMeesho() {
     console.log("🔍 Starting scrapeMeesho function...");
-    window.hasSentInfoForThisScrape = false; // Reset flag for this attempt
-
+    
     let title = '';
-    const titleSelectors = ['h1'];
+    const titleSelectors = ['h1']; // Main product title
     for (const selector of titleSelectors) {
         const el = document.querySelector(selector);
         if (el) {
@@ -119,11 +123,12 @@ function scrapeMeesho() {
  */
 function waitForContentAndScrape(context) {
   // Prevent multiple simultaneous attempts
-  if (scrapeAttemptedForCurrentNavigation && context !== "Initial Load") {
+  if (scrapeAttemptedForCurrentNavigation) {
       console.log(`[waitForContentAndScrape / ${context}] Scrape already attempted/running for this navigation. Skipping.`);
       return;
   }
   scrapeAttemptedForCurrentNavigation = true; // Set flag early
+  hasSentInfoForThisScrape = false; // Reset send flag for this new attempt
 
   const titleSelector = "h1";
   const priceSelectors = ['h4', 'h4.sc-eDV5Ve', 'h4[class*="Price__PriceValue"]'];
@@ -135,7 +140,7 @@ function waitForContentAndScrape(context) {
 
   const interval = setInterval(() => {
     // Stop if another scrape finished in the meantime
-    if (window.hasSentInfoForThisScrape && context !== "Initial Load") {
+    if (hasSentInfoForThisScrape) {
          console.log(`[waitForContentAndScrape / ${context}] Scrape completed by another trigger. Stopping poll.`);
         clearInterval(interval);
         return;
@@ -143,13 +148,21 @@ function waitForContentAndScrape(context) {
 
     const currentTitleElement = document.querySelector(titleSelector);
     const currentTitle = currentTitleElement ? currentTitleElement.innerText.trim() : "";
+    
     let currentPriceElement = null;
     for(const pSelector of priceSelectors){
         currentPriceElement = document.querySelector(pSelector);
         if(currentPriceElement) break;
     }
 
-    const conditionMet = currentTitleElement && currentPriceElement && currentTitle && currentTitle !== lastSuccessfullyScrapedTitle;
+    // *** THE KEY LOGIC ***
+    // Condition: We found a title, we found a price, AND
+    // the title is not empty, AND
+    // the title is DIFFERENT from the last one we scraped.
+    const conditionMet = currentTitleElement && 
+                         currentPriceElement && 
+                         currentTitle && 
+                         currentTitle !== lastSuccessfullyScrapedTitle;
 
     if (conditionMet) {
       clearInterval(interval);
@@ -162,9 +175,23 @@ function waitForContentAndScrape(context) {
       if (waited >= maxWait) {
         console.warn(`[waitForContentAndScrape / ${context}] Timeout waiting for new product title/price change. Running scrape anyway.`);
         clearInterval(interval);
+        
         // *** SCRAPE AFTER TIMEOUT ***
+        // This handles the very first page load, where lastSuccessfullyScrapedTitle is ""
         const productData = scrapeMeesho();
-        sendProductInfo(productData, context + " / Wait Timeout");
+        if (productData.title && productData.title !== lastSuccessfullyScrapedTitle) {
+             // This case happens if the page was just slow to load
+             sendProductInfo(productData, context + " / Wait Timeout");
+        } else if (!lastSuccessfullyScrapedTitle && productData.title) {
+             // If this is the first ever scrape and it timed out, send it anyway
+             sendProductInfo(productData, context + " / Wait Timeout (First Load)");
+        } else {
+             console.log(`[waitForContentAndScrape / ${context}] Timeout scrape found same title or no title. Not sending.`);
+             // Send null to clear any old data in popup if scrape failed
+             if (!productData.title) {
+                sendProductInfo(null, context + " / Wait Timeout (Scrape Failed)");
+             }
+        }
       }
     }
   }, checkInterval);
@@ -180,14 +207,19 @@ waitForContentAndScrape("Initial Load");
 
 // Listen ONLY for messages from our background script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Check that the message is from our extension, not a webpage
+  if (sender.id !== chrome.runtime.id) {
+    return false;
+  }
+    
   if (message.type === "RUN_SCRAPE") {
     console.log(" Received RUN_SCRAPE message from background. Resetting flag and starting wait...");
-    // Reset the flag and START the wait process
+    // This is the key: a navigation happened. Reset the attempt flag.
     scrapeAttemptedForCurrentNavigation = false;
-    window.hasSentInfoForThisScrape = false; // Also reset send flag
     waitForContentAndScrape("Background Trigger");
+    sendResponse({ success: true }); // Acknowledge the message
   }
-  return false;
+  return true; // Indicate you may respond asynchronously
 });
 
 console.log("Meesho content script loaded and listener attached.");

@@ -1,5 +1,24 @@
 let currentProductInfo = null;
 
+// --- NEW LISTENER TO DETECT SPA NAVIGATION ---
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    // Check if the URL changed and the tab is a meesho page
+    if (changeInfo.url && tab.url && tab.url.includes("meesho.com")) {
+        // The URL has changed, so the user has likely navigated.
+        // Reset the product info and tell the content script to re-scrape.
+        currentProductInfo = null;
+        
+        // Send a message to the content script in that tab
+        chrome.tabs.sendMessage(tabId, { type: "RUN_SCRAPE" }, (response) => {
+            if (chrome.runtime.lastError) {
+                // This error is expected if the content script isn't injected yet on a fresh page
+                // console.log("Content script not ready yet, or no receiver.");
+            }
+        });
+    }
+});
+// --- END OF NEW LISTENER ---
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.type === "PRODUCT_INFO") {
         currentProductInfo = request.product;
