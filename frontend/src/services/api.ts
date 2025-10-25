@@ -9,6 +9,15 @@ const api = axios.create({
   },
 });
 
+// --- NEW: Function to set auth token ---
+export const setAuthToken = (token: string | null) => {
+  if (token) {
+    api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+  } else {
+    delete api.defaults.headers.common['Authorization'];
+  }
+};
+
 // --- TYPE DEFINITIONS ---
 export interface Product {
   id: number;
@@ -74,6 +83,15 @@ export interface Sale {
   region: string;
   start_date?: string;
   end_date?: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+// --- NEW: Export UserResponse for Context ---
+export interface UserResponse {
+  id: number;
+  email: string;
+  full_name?: string;
   is_active: boolean;
   created_at: string;
 }
@@ -167,5 +185,13 @@ export const deleteAllProducts = async () => {
   const response = await api.delete('/products/all');
   return response.data;
 };
+
+// --- NEW: Auth API Functions ---
+// (Note: We implement login/logout in AuthContext, but you could put them here)
+export const registerUser = async (email: string, password: string, fullName: string) => {
+  const response = await api.post('/users/register', { email, password, full_name: fullName });
+  return response.data;
+};
+
 
 export default api;

@@ -8,6 +8,7 @@ import Sales from './pages/Sales'
 import Settings from './pages/Settings'
 import ProductDetail from './pages/ProductDetail'
 import AllProducts from './pages/AllProducts';
+import Login from './pages/Login'; // Import Login
 
 function App() {
   const [darkMode, setDarkMode] = useState(() => {
@@ -26,15 +27,18 @@ function App() {
 
   return (
     <Router>
-      <Layout darkMode={darkMode} setDarkMode={setDarkMode}>
+      {/* --- FIX: Removed darkMode and setDarkMode props from Layout --- */}
+      <Layout>
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/watchlist" element={<Watchlist />} />
           <Route path="/add" element={<AddProduct />} />
           <Route path="/sales" element={<Sales />} />
+          {/* Props are still correctly passed to Settings */}
           <Route path="/settings" element={<Settings darkMode={darkMode} setDarkMode={setDarkMode} />} />
           <Route path="/product/:productId" element={<ProductDetail />} />
           <Route path="/all-products" element={<AllProducts />} />
+          <Route path="/login" element={<Login />} />
         </Routes>
       </Layout>
     </Router>

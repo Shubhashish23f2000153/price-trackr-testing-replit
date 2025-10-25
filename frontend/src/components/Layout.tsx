@@ -1,14 +1,15 @@
 import { Link, useLocation } from 'react-router-dom'
-import { LayoutDashboard, ListChecks, Plus, Tag, Settings, User } from 'lucide-react'
+import { LayoutDashboard, ListChecks, Plus, Tag, Settings, User, LogOut, LogIn } from 'lucide-react'
+import { useAuth } from '../context/AuthContext' // Import useAuth
 
 interface LayoutProps {
   children: React.ReactNode
-  darkMode: boolean
-  setDarkMode: (value: boolean) => void
+  // REMOVED darkMode and setDarkMode from here
 }
 
-export default function Layout({ children, darkMode, setDarkMode }: LayoutProps) {
+export default function Layout({ children }: LayoutProps) { // REMOVED from function signature
   const location = useLocation()
+  const { user, logout } = useAuth() // Get user and logout from context
 
   const navItems = [
     { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -30,9 +31,23 @@ export default function Layout({ children, darkMode, setDarkMode }: LayoutProps)
               </div>
               <h1 className="text-xl font-semibold">PriceTrackr</h1>
             </div>
+            
+            {/* MODIFIED: Show user email or login button */}
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-600 dark:text-gray-400">hi, anonymous user</span>
-              <User className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+              {user ? (
+                <>
+                  <span className="text-sm text-gray-600 dark:text-gray-400">hi, {user.email}</span>
+                  <User className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                  <button onClick={logout} title="Logout" className="p-1 text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white">
+                    <LogOut className="w-5 h-5" />
+                  </button>
+                </>
+              ) : (
+                <Link to="/login" className="flex items-center space-x-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white">
+                  <LogIn className="w-5 h-5" />
+                  <span>Login</span>
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -71,7 +86,7 @@ export default function Layout({ children, darkMode, setDarkMode }: LayoutProps)
         </div>
       </main>
 
-      {/* Footer */}
+      {/* Footer (remains the same) */}
       <footer className="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 py-4">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-sm text-gray-600 dark:text-gray-400">
           <p>All prices displayed are approximate and sourced from publicly available information</p>
