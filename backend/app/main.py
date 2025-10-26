@@ -4,7 +4,7 @@ from .config import settings
 from .database import init_db
 from .api import api_router
 from .utils.websocket import manager
-import aioredis # Import aioredis
+import redis.asyncio as aioredis
 import asyncio
 import json
 

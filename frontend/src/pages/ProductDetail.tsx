@@ -12,11 +12,11 @@ import {
   Watchlist
 } from '../services/api';
 import { ArrowLeft, Tag, BarChart2, Heart, Trash2, AlertTriangle } from 'lucide-react';
-// XAxis is now used
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useWebSocket } from '../hooks/useWebSocket';
+import { useAuth } from '../context/AuthContext'; // 1. Import useAuth
 
-// Helper function (remains the same)
+// Helper function
 const findWatchlistItemId = (productId: number | undefined, watchlist: Watchlist[]): number | null => {
     if (productId === undefined) return null;
     const item = watchlist.find(w => w.product_id === productId);
@@ -33,7 +33,9 @@ export default function ProductDetail() {
   const [userWatchlist, setUserWatchlist] = useState<Watchlist[]>([]);
   const { lastMessage } = useWebSocket();
   const numProductId = parseInt(productId || "0");
+  const { user } = useAuth(); // 2. Get the user state
 
+  // Live update WebSocket
   useEffect(() => {
     if (lastMessage && lastMessage.type === 'PRICE_UPDATE' && lastMessage.product_id === numProductId) {
       console.log("Live update received!", lastMessage);
@@ -76,6 +78,7 @@ export default function ProductDetail() {
     }
   }, [lastMessage, numProductId]);
 
+  // Modified Data Fetching
   useEffect(() => {
     if (!productId) {
         setIsLoading(false);
@@ -88,42 +91,57 @@ export default function ProductDetail() {
         return;
     }
 
-    const fetchData = async () => {
+    const fetchEssentialData = async () => {
       setIsLoading(true);
       try {
+        // 1. Fetch essential data first
         const productPromise = getProduct(numProductId);
         const historyPromise = getPriceHistory(numProductId);
-        const watchlistPromise = getWatchlist();
-        const [productData, historyData, watchlistData] = await Promise.all([
+        
+        const [productData, historyData] = await Promise.all([
           productPromise,
-          historyPromise,
-          watchlistPromise
+          historyPromise
         ]);
 
         setProduct(productData);
-        setUserWatchlist(watchlistData); 
-        const watchlistItem = watchlistData.find(item => item.product_id === numProductId);
-        setIsWatchlisted(productData.is_in_watchlist ?? !!watchlistItem);
-
         setHistory(historyData.map((h: PriceHistoryItem) => ({
             ...h,
-            // Format date for the chart
             date: new Date(h.date).toLocaleDateString()
         })));
+        
+        // 2. Fetch non-essential data (watchlist) separately
+        setIsWatchlisted(productData.is_in_watchlist);
+        try {
+            const watchlistData = await getWatchlist();
+            setUserWatchlist(watchlistData); 
+            const watchlistItem = watchlistData.find(item => item.product_id === numProductId);
+            setIsWatchlisted(!!watchlistItem); // Update with the most current info
+        } catch (watchlistError) {
+            console.warn("Could not fetch watchlist, using product default.", watchlistError);
+        }
 
       } catch (error) {
-        console.error("Failed to fetch product details or watchlist:", error);
+        console.error("Failed to fetch essential product details:", error);
         setProduct(null); 
       } finally {
         setIsLoading(false);
       }
     };
-    fetchData();
+    fetchEssentialData();
   }, [productId]);
 
-  // handleToggleWatchlist (remains the same)
+
   const handleToggleWatchlist = async () => {
     if (!product) return;
+
+    // 3. Prompt user to login if they are a guest
+    if (!user) {
+      if (window.confirm("You need to be logged in to save items to your watchlist.\n\nClick OK to go to the login page.")) {
+        navigate('/login');
+      }
+      return;
+    }
+
     const currentProductId = product.id;
     try {
       if (isWatchlisted) {
@@ -148,7 +166,6 @@ export default function ProductDetail() {
     }
   };
 
-  // handleDelete (remains the same)
   const handleDelete = async () => {
      if (product && window.confirm("Are you sure? This will permanently delete the product and all its price history.")) {
       try {
@@ -172,7 +189,7 @@ export default function ProductDetail() {
 
   return (
     <div className="space-y-6">
-      {/* Header (remains the same) */}
+      {/* Header */}
       <div className="flex justify-between items-start gap-4">
         <div className="flex-1 min-w-0">
           <Link to="/all-products" className="flex items-center space-x-2 text-sm text-gray-500 hover:text-black dark:hover:text-white mb-4">
@@ -192,7 +209,7 @@ export default function ProductDetail() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Left Column (remains the same) */}
+        {/* Left Column (Image & Prices) */}
         <div className="md:col-span-1 space-y-4">
           <div className="card p-4 flex justify-center items-center aspect-square">
             <img src={product.image_url || 'https://via.placeholder.com/300?text=No+Image'} alt={product.title} className="rounded-lg object-contain w-full h-full max-h-80" />
@@ -210,7 +227,7 @@ export default function ProductDetail() {
           </div>
         </div>
 
-        {/* Right Column (Chart Fixed) */}
+        {/* Right Column (Chart & Details) */}
         <div className="md:col-span-2 space-y-4">
           <div className="card">
             <h3 className="text-lg font-semibold mb-2">Price Overview</h3>
@@ -228,7 +245,6 @@ export default function ProductDetail() {
               <ResponsiveContainer width="100%" height={300}>
                 <LineChart data={history} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  {/* --- FIX: Added XAxis component --- */}
                   <XAxis dataKey="date" /> 
                   <YAxis domain={['dataMin - 100', 'dataMax + 100']} allowDecimals={false}/>
                   <Tooltip />
@@ -246,13 +262,12 @@ export default function ProductDetail() {
         </div>
       </div>
 
-      {/* Danger Zone (Typo Fixed) */}
+      {/* Danger Zone -- THIS IS THE FIX --- */}
       <div className="card border-red-500/30 dark:border-red-500/50 mt-8">
         <h3 className="text-lg font-semibold text-red-700 dark:text-red-400 flex items-center space-x-2">
           <AlertTriangle className="w-5 h-5" />
           <span>Danger Zone</span>
         </h3>
-        {/* --- FIX: Corrected closing </p> tag --- */}
         <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 mb-4">
           Permanently stop tracking this item. This action cannot be undone.
         </p>

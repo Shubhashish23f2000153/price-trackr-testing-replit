@@ -9,7 +9,7 @@ const api = axios.create({
   },
 });
 
-// --- NEW: Function to set auth token ---
+// --- Function to set auth token ---
 export const setAuthToken = (token: string | null) => {
   if (token) {
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
@@ -17,6 +17,16 @@ export const setAuthToken = (token: string | null) => {
     delete api.defaults.headers.common['Authorization'];
   }
 };
+
+// --- NEW: Function to set anonymous ID header ---
+export const setAnonymousId = (anonId: string | null) => {
+  if (anonId) {
+    api.defaults.headers.common['X-Anonymous-ID'] = anonId;
+  } else {
+    delete api.defaults.headers.common['X-Anonymous-ID'];
+  }
+};
+
 
 // --- TYPE DEFINITIONS ---
 export interface Product {
@@ -46,9 +56,8 @@ export interface ProductDetail extends Product {
   is_in_watchlist: boolean;
 }
 
-// Ensure PriceHistoryItem is exported
 export interface PriceHistoryItem {
-    date: string; // Keep as string for chart compatibility
+    date: string;
     price: number;
     source: string;
 }
@@ -73,7 +82,6 @@ export interface DashboardStats {
   total_saved: number;
 }
 
-// Add the Sale type definition if it's missing
 export interface Sale {
   id: number;
   title: string;
@@ -87,7 +95,6 @@ export interface Sale {
   created_at: string;
 }
 
-// --- NEW: Export UserResponse for Context ---
 export interface UserResponse {
   id: number;
   email: string;
@@ -115,13 +122,9 @@ export const getPriceHistory = async (productId: number, days = 30): Promise<Pri
 };
 
 export const trackProduct = async (url: string) => {
-  // Use the /track endpoint, NOT /add-from-extension for the web app form
   const response = await api.post('/products/track', { url, title: 'Loading...' }); 
   return response.data;
 };
-
-// Removed duplicate trackProduct
-// export const trackProduct = async (url: string) => { ... }
 
 export const deleteProduct = async (productId: number) => {
   const response = await api.delete(`/products/${productId}`);
@@ -142,16 +145,13 @@ export const addToWatchlist = async (productId: number, alertRules?: any) => {
     return response.data;
 };
 
-// Add this function definition
 export const updateWatchlistAlert = async (watchlistId: number, alertPrice: number) => {
-  const alertRules = { threshold: alertPrice, type: 'below' }; // Define the rule structure
+  const alertRules = { threshold: alertPrice, type: 'below' };
   const response = await api.put(`/watchlist/${watchlistId}`, { alert_rules: alertRules });
   return response.data;
 };
 
-// Placeholder: Needs implementation - Requires finding the watchlist item ID first
 export const removeFromWatchlist = async (watchlistId: number) => {
-    console.warn("removeFromWatchlist needs implementation with the correct watchlist ID");
     const response = await api.delete(`/watchlist/${watchlistId}`);
     return response.data;
 };
@@ -170,12 +170,8 @@ export const getDashboardStats = async (): Promise<DashboardStats> => {
 // Sales API
 export const getSales = async (region?: string, status?: 'ongoing' | 'upcoming'): Promise<Sale[]> => {
   const params: { region?: string; status?: string } = {};
-  if (region) {
-    params.region = region;
-  }
-  if (status) {
-    params.status = status;
-  }
+  if (region) params.region = region;
+  if (status) params.status = status;
   
   const response = await api.get<Sale[]>('/sales/', { params });
   return response.data;
@@ -186,12 +182,22 @@ export const deleteAllProducts = async () => {
   return response.data;
 };
 
-// --- NEW: Auth API Functions ---
-// (Note: We implement login/logout in AuthContext, but you could put them here)
+// Auth API Functions
 export const registerUser = async (email: string, password: string, fullName: string) => {
   const response = await api.post('/users/register', { email, password, full_name: fullName });
   return response.data;
 };
 
+// --- NEW: Merge API function ---
+export const mergeAnonymousData = async (anonId: string) => {
+  // We set the header just for this request, as the user is now logged in
+  // and we don't want this header sent on future requests.
+  const response = await api.post('/users/merge', {}, {
+    headers: {
+      'X-Anonymous-ID': anonId
+    }
+  });
+  return response.data;
+}
 
 export default api;

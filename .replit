@@ -1,8 +1,3 @@
-entrypoint = "main.py"
-modules = ["python-3.10", "nodejs-20"]
-
-hidden = [".pythonlibs"]
-
 [nix]
 channel = "stable-23_05"
 
@@ -10,36 +5,37 @@ channel = "stable-23_05"
 language = "python3"
 
 [deployment]
-run = ["python3", "main.py"]
 deploymentTarget = "cloudrun"
 
 [agent]
 expertMode = true
 
+[ports]
+# Expose the frontend port (5000) for the webview
+localPort = 5000
+externalPort = 80
+
+# Expose the backend port (8000) so the extension can reach it
+[[ports]]
+localPort = 8000
+externalPort = 8000
+
 [workflows]
-runButton = "Project"
+# Define the default "run" button action
+runButton = "Run Project"
 
 [[workflows.workflow]]
-name = "Project"
-mode = "parallel"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Frontend"
-
-[[workflows.workflow]]
-name = "Frontend"
+# This is the main workflow that runs everything
+name = "Run Project"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd frontend && npm run dev"
+# Run the docker-compose file located in the /infra directory
+# The '-d' is removed so logs stream to the console
+args = "docker compose -f infra/docker-compose.yml up --build"
+# Wait for the frontend port to be ready before opening the webview
 waitForPort = 5000
 
 [workflows.workflow.metadata]
 outputType = "webview"
-
-[[ports]]
-localPort = 5000
-externalPort = 80
