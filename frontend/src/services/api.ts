@@ -18,7 +18,7 @@ export const setAuthToken = (token: string | null) => {
   }
 };
 
-// --- NEW: Function to set anonymous ID header ---
+// --- Function to set anonymous ID header ---
 export const setAnonymousId = (anonId: string | null) => {
   if (anonId) {
     api.defaults.headers.common['X-Anonymous-ID'] = anonId;
@@ -48,6 +48,12 @@ export interface PriceInfo {
   availability: string;
   in_stock: boolean;
   url: string;
+  seller_name?: string | null;
+  seller_rating?: string | null;
+  seller_review_count?: string | null;
+  // --- ADDED Sentiment Field ---
+  avg_review_sentiment?: number | null; // Added Optional number field
+  // --- End Sentiment Field ---
 }
 
 export interface ProductDetail extends Product {
@@ -103,6 +109,16 @@ export interface UserResponse {
   created_at: string;
 }
 
+export interface ScamScore {
+  domain: string;
+  score: number;
+  trust_level: 'high' | 'medium' | 'low' | 'unknown';
+  whois_days_old?: number;
+  safe_browsing_flag: boolean;
+  message?: string;
+}
+
+
 // --- API FUNCTIONS ---
 
 // Products API
@@ -122,7 +138,7 @@ export const getPriceHistory = async (productId: number, days = 30): Promise<Pri
 };
 
 export const trackProduct = async (url: string) => {
-  const response = await api.post('/products/track', { url, title: 'Loading...' }); 
+  const response = await api.post('/products/track', { url, title: 'Loading...' });
   return response.data;
 };
 
@@ -172,7 +188,7 @@ export const getSales = async (region?: string, status?: 'ongoing' | 'upcoming')
   const params: { region?: string; status?: string } = {};
   if (region) params.region = region;
   if (status) params.status = status;
-  
+
   const response = await api.get<Sale[]>('/sales/', { params });
   return response.data;
 };
@@ -188,10 +204,7 @@ export const registerUser = async (email: string, password: string, fullName: st
   return response.data;
 };
 
-// --- NEW: Merge API function ---
 export const mergeAnonymousData = async (anonId: string) => {
-  // We set the header just for this request, as the user is now logged in
-  // and we don't want this header sent on future requests.
   const response = await api.post('/users/merge', {}, {
     headers: {
       'X-Anonymous-ID': anonId
@@ -199,5 +212,11 @@ export const mergeAnonymousData = async (anonId: string) => {
   });
   return response.data;
 }
+
+// Scam API Function
+export const getScamScore = async (domain: string): Promise<ScamScore> => {
+  const response = await api.get('/scam/check', { params: { domain } });
+  return response.data;
+};
 
 export default api;

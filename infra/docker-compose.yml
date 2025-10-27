@@ -6,7 +6,7 @@ services:
     container_name: pricetrackr-db
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-pricetrackr}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pricetrackr_password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-new_secure_password}
       POSTGRES_DB: ${POSTGRES_DB:-pricetrackr}
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -41,7 +41,7 @@ services:
       dockerfile: Dockerfile
     container_name: pricetrackr-backend
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-pricetrackr}:${POSTGRES_PASSWORD:-pricetrackr_password}@postgres:5432/${POSTGRES_DB:-pricetrackr}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-pricetrackr}:${POSTGRES_PASSWORD:-new_secure_password}@postgres:5432/${POSTGRES_DB:-pricetrackr}
       REDIS_URL: redis://redis:6379/0
       CORS_ORIGINS: http://localhost:5000,http://localhost:3000
     ports:
@@ -62,7 +62,7 @@ services:
     container_name: pricetrackr-worker
     environment:
       REDIS_URL: redis://redis:6379/0
-      DATABASE_URL: postgresql://${POSTGRES_USER:-pricetrackr}:${POSTGRES_PASSWORD:-pricetrackr_password}@postgres:5432/${POSTGRES_DB:-pricetrackr}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-pricetrackr}:${POSTGRES_PASSWORD:-new_secure_password}@postgres:5432/${POSTGRES_DB:-pricetrackr}
     depends_on:
       redis:
         condition: service_healthy

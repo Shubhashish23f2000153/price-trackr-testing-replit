@@ -7,25 +7,170 @@ import {
   removeFromWatchlist,
   deleteProduct,
   getWatchlist,
+  getScamScore,
   ProductDetail as ProductDetailType,
   PriceHistoryItem,
-  Watchlist
+  Watchlist,
+  ScamScore
 } from '../services/api';
-import { ArrowLeft, Tag, BarChart2, Heart, Trash2, AlertTriangle } from 'lucide-react';
+// --- Import Icons ---
+import { ArrowLeft, Tag, BarChart2, Heart, Trash2, AlertTriangle, Star, CheckCircle, HelpCircle } from 'lucide-react';
+// --- End Import ---
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useWebSocket } from '../hooks/useWebSocket';
-import { useAuth } from '../context/AuthContext'; // 1. Import useAuth
+import { useAuth } from '../context/AuthContext';
+import TrustBadge from '../components/TrustBadge';
 
-// Helper function
+// --- Seller Trust Helper Functions & Component ---
+interface SellerTrustInfo {
+  level: 'good' | 'okay' | 'poor' | 'new' | 'unknown';
+  message: string;
+}
+
+// Function to parse rating string (e.g., "4.5 Stars", "90% Positive") into a number 0-5
+const parseRating = (ratingStr: string | null | undefined): number | null => {
+    if (!ratingStr) return null;
+    let numericRating: number | null = null;
+
+    // Check for "X.X Stars" or just "X.X"
+    let match = ratingStr.match(/([\d\.]+)/);
+    if (match) {
+        numericRating = parseFloat(match[1]);
+    } else {
+        // Check for "XX% Positive"
+        match = ratingStr.match(/(\d+)%\s*Positive/i);
+        if (match) {
+            // Convert percentage to a 0-5 scale (simple linear mapping)
+            numericRating = (parseFloat(match[1]) / 100) * 5;
+        }
+    }
+    // Clamp rating between 0 and 5
+    if (numericRating !== null) {
+       return Math.max(0, Math.min(5, numericRating));
+    }
+    return null;
+};
+
+// Function to parse review count string (e.g., "1,500", "5k") into a number
+const parseReviewCount = (countStr: string | null | undefined): number | null => {
+    if (!countStr) return null;
+    let numStr = countStr.toLowerCase().replace(/,/g, '');
+    let multiplier = 1;
+    if (numStr.endsWith('k')) {
+        multiplier = 1000;
+        numStr = numStr.slice(0, -1);
+    } else if (numStr.endsWith('m')) {
+        multiplier = 1000000;
+        numStr = numStr.slice(0, -1);
+    }
+    const num = parseFloat(numStr);
+    return isNaN(num) ? null : Math.round(num * multiplier);
+};
+
+// Determines seller trust level based on rating and review count
+const getSellerTrustLevel = (
+    ratingStr: string | null | undefined,
+    countStr: string | null | undefined
+): SellerTrustInfo => {
+    const rating = parseRating(ratingStr);
+    const count = parseReviewCount(countStr);
+
+    if (rating === null && (count === null || count === 0)) {
+        return { level: 'unknown', message: 'Seller information not available.' };
+    }
+
+    // Prioritize low rating regardless of count
+    if (rating !== null && rating < 3.5) {
+        return { level: 'poor', message: `Low seller rating (${rating.toFixed(1)}/5). Consider checking recent reviews.` };
+    }
+
+    // High rating and high count = good
+    if (rating !== null && rating >= 4.2 && count !== null && count >= 500) {
+        return { level: 'good', message: `Good rating (${rating.toFixed(1)}/5) with many reviews (${count.toLocaleString()}).` };
+    }
+
+    // Good rating but low count = new/unproven
+    if (rating !== null && rating >= 4.0 && (count === null || count < 100)) {
+        return { level: 'new', message: `Rating is okay (${rating.toFixed(1)}/5), but seller has few reviews. Verify seller reputation.` };
+    }
+     // Only count available, and it's low
+    if (rating === null && count !== null && count < 100) {
+        return { level: 'new', message: `Seller has few reviews (${count.toLocaleString()}). Verify seller reputation.` };
+    }
+
+    // Default to 'okay' for moderate ratings or high counts with moderate ratings
+    if (rating !== null || count !== null) {
+        let message = "Seller rating seems acceptable.";
+        if (rating !== null) message += ` (${rating.toFixed(1)}/5)`;
+        if (count !== null) message += ` (${count.toLocaleString()} reviews)`;
+        return { level: 'okay', message: message };
+    }
+
+    return { level: 'unknown', message: 'Could not determine seller trust.' }; // Fallback
+};
+
+// Component to display the seller trust level with icon and hover info
+const SellerTrustIndicator: React.FC<{ trustInfo: SellerTrustInfo }> = ({ trustInfo }) => {
+    const details = {
+        good: { Icon: CheckCircle, color: 'text-green-600 dark:text-green-400', text: 'Good Seller Rating' },
+        okay: { Icon: CheckCircle, color: 'text-blue-600 dark:text-blue-400', text: 'Okay Seller Rating' },
+        new: { Icon: HelpCircle, color: 'text-yellow-600 dark:text-yellow-400', text: 'New/Few Reviews' },
+        poor: { Icon: AlertTriangle, color: 'text-red-600 dark:text-red-400', text: 'Low Seller Rating' },
+        unknown: { Icon: HelpCircle, color: 'text-gray-500 dark:text-gray-400', text: 'Seller Info Unknown' }
+    }[trustInfo.level];
+
+    const [isPopoverVisible, setIsPopoverVisible] = useState(false);
+
+    // Don't render if level is unknown and message indicates unavailability
+    if (trustInfo.level === 'unknown' && trustInfo.message === 'Seller information not available.') {
+      return null;
+    }
+
+
+    return (
+        <div className={`relative flex items-center space-x-1 text-xs ${details.color}`}>
+            <details.Icon className="w-3.5 h-3.5 flex-shrink-0" /> {/* Added flex-shrink-0 */}
+            <span
+                className="cursor-help whitespace-nowrap" // Added whitespace-nowrap
+                onMouseEnter={() => setIsPopoverVisible(true)}
+                onMouseLeave={() => setIsPopoverVisible(false)}
+            >
+                {details.text}
+            </span>
+            {isPopoverVisible && (
+                <div className="absolute top-full left-0 mt-1 w-60 p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-lg z-10 text-xs text-gray-700 dark:text-gray-300">
+                    {trustInfo.message}
+                </div>
+            )}
+        </div>
+    );
+};
+// --- End Seller Trust ---
+
+
+// Helper function to extract domain (remains the same)
+const getDomainFromUrl = (url: string): string | null => {
+  try {
+    const parsedUrl = new URL(url);
+    return parsedUrl.hostname.replace('www.', '');
+  } catch (error) {
+    console.warn("Could not parse URL for domain:", url);
+    return null;
+  }
+};
+
+// Helper function to find watchlist item ID (remains the same)
 const findWatchlistItemId = (productId: number | undefined, watchlist: Watchlist[]): number | null => {
     if (productId === undefined) return null;
     const item = watchlist.find(w => w.product_id === productId);
     return item ? item.id : null;
 };
 
+// --- Main Component ---
 export default function ProductDetail() {
   const { productId } = useParams<{ productId: string }>();
   const navigate = useNavigate();
+  // State Variables
   const [product, setProduct] = useState<ProductDetailType | null>(null);
   const [history, setHistory] = useState<PriceHistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -33,22 +178,31 @@ export default function ProductDetail() {
   const [userWatchlist, setUserWatchlist] = useState<Watchlist[]>([]);
   const { lastMessage } = useWebSocket();
   const numProductId = parseInt(productId || "0");
-  const { user } = useAuth(); // 2. Get the user state
+  const { user } = useAuth();
+  const [scamScore, setScamScore] = useState<ScamScore | null>(null);
+  const [isScamScoreLoading, setIsScamScoreLoading] = useState(true);
 
-  // Live update WebSocket
+  // Live update WebSocket Effect
   useEffect(() => {
     if (lastMessage && lastMessage.type === 'PRICE_UPDATE' && lastMessage.product_id === numProductId) {
       console.log("Live update received!", lastMessage);
       setProduct(prevProduct => {
         if (!prevProduct) return null;
-        
+
         const updatedPrices = prevProduct.prices.map(priceInfo => {
           if (priceInfo.source_name.toLowerCase() === lastMessage.source_name.toLowerCase()) {
-            return { ...priceInfo, current_price: lastMessage.new_price };
+            return {
+                ...priceInfo,
+                current_price: lastMessage.new_price,
+                // Update seller info if present in WS message
+                seller_name: lastMessage.seller_name !== undefined ? lastMessage.seller_name : priceInfo.seller_name,
+                seller_rating: lastMessage.seller_rating !== undefined ? lastMessage.seller_rating : priceInfo.seller_rating,
+                seller_review_count: lastMessage.seller_review_count !== undefined ? lastMessage.seller_review_count : priceInfo.seller_review_count,
+            };
           }
           return priceInfo;
         });
-        
+
         const sourceExists = prevProduct.prices.some(
           p => p.source_name.toLowerCase() === lastMessage.source_name.toLowerCase()
         );
@@ -57,10 +211,13 @@ export default function ProductDetail() {
             updatedPrices.push({
                 source_name: lastMessage.source_name,
                 current_price: lastMessage.new_price,
-                currency: "INR", 
-                availability: "In Stock", 
-                in_stock: true, 
-                url: "" 
+                currency: "INR", // Defaults, adjust if needed
+                availability: "In Stock",
+                in_stock: true,
+                url: "", // Not available in WS
+                seller_name: lastMessage.seller_name,
+                seller_rating: lastMessage.seller_rating,
+                seller_review_count: lastMessage.seller_review_count,
             });
         }
 
@@ -68,73 +225,84 @@ export default function ProductDetail() {
           prevProduct.lowest_ever_price || Infinity,
           lastMessage.new_price
         );
-        
-        return {
-          ...prevProduct,
-          prices: updatedPrices,
-          lowest_ever_price: newLowest,
-        };
+
+        return { ...prevProduct, prices: updatedPrices, lowest_ever_price: newLowest };
       });
     }
   }, [lastMessage, numProductId]);
 
-  // Modified Data Fetching
+  // Data Fetching Effect
   useEffect(() => {
-    if (!productId) {
-        setIsLoading(false);
-        return;
-    }
+    if (!productId) { setIsLoading(false); return; }
     const numProductId = parseInt(productId);
-    if (isNaN(numProductId)) {
-        setIsLoading(false);
-        setProduct(null);
-        return;
-    }
+    if (isNaN(numProductId)) { setIsLoading(false); setProduct(null); return; }
 
-    const fetchEssentialData = async () => {
+    const fetchAllData = async () => {
       setIsLoading(true);
+      setIsScamScoreLoading(true);
+      setProduct(null);
+      setScamScore(null);
+      setHistory([]); // Clear history too
+
       try {
-        // 1. Fetch essential data first
+        // Fetch product and history
         const productPromise = getProduct(numProductId);
         const historyPromise = getPriceHistory(numProductId);
-        
-        const [productData, historyData] = await Promise.all([
-          productPromise,
-          historyPromise
-        ]);
+        const [productData, historyData] = await Promise.all([productPromise, historyPromise]);
 
         setProduct(productData);
         setHistory(historyData.map((h: PriceHistoryItem) => ({
             ...h,
             date: new Date(h.date).toLocaleDateString()
         })));
-        
-        // 2. Fetch non-essential data (watchlist) separately
-        setIsWatchlisted(productData.is_in_watchlist);
+
+        // Fetch watchlist
+        setIsWatchlisted(productData.is_in_watchlist); // Set initial
         try {
             const watchlistData = await getWatchlist();
-            setUserWatchlist(watchlistData); 
+            setUserWatchlist(watchlistData);
             const watchlistItem = watchlistData.find(item => item.product_id === numProductId);
-            setIsWatchlisted(!!watchlistItem); // Update with the most current info
+            setIsWatchlisted(!!watchlistItem); // Update with actual
         } catch (watchlistError) {
             console.warn("Could not fetch watchlist, using product default.", watchlistError);
         }
 
+        // Fetch Domain Scam Score
+        let domainToCheck: string | null = null;
+        if (productData.prices.length > 0 && productData.prices[0].url) {
+            domainToCheck = getDomainFromUrl(productData.prices[0].url);
+        }
+
+        if (domainToCheck) {
+            try {
+                const scoreData = await getScamScore(domainToCheck);
+                setScamScore(scoreData);
+            } catch (scamError) {
+                console.error("Failed to fetch scam score:", scamError);
+                setScamScore(null);
+            } finally {
+                 setIsScamScoreLoading(false);
+            }
+        } else {
+            setIsScamScoreLoading(false); // No domain, finish loading
+        }
+
       } catch (error) {
         console.error("Failed to fetch essential product details:", error);
-        setProduct(null); 
+        setProduct(null);
+        setIsScamScoreLoading(false); // Ensure loading stops on error
       } finally {
         setIsLoading(false);
       }
     };
-    fetchEssentialData();
-  }, [productId]);
+    fetchAllData();
+  }, [productId]); // Re-run ALL fetches if the productId changes
 
 
+  // Event Handlers
   const handleToggleWatchlist = async () => {
     if (!product) return;
 
-    // 3. Prompt user to login if they are a guest
     if (!user) {
       if (window.confirm("You need to be logged in to save items to your watchlist.\n\nClick OK to go to the login page.")) {
         navigate('/login');
@@ -178,6 +346,7 @@ export default function ProductDetail() {
     }
   };
 
+  // Loading and Error States
   if (isLoading) {
     return <div className="text-center p-8">Loading product details...</div>;
   }
@@ -185,8 +354,10 @@ export default function ProductDetail() {
     return <div className="text-center p-8 card bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300">Product not found or failed to load.</div>;
   }
 
-  const latestPriceInfo = product.prices.length > 0 ? product.prices[product.prices.length - 1] : null;
+  // Determine latest price for overview card (simple check)
+  const latestPriceInfoForOverview = product.prices.length > 0 ? product.prices[0] : null;
 
+  // Render JSX
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -208,6 +379,7 @@ export default function ProductDetail() {
         </button>
       </div>
 
+      {/* Main Content Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Left Column (Image & Prices) */}
         <div className="md:col-span-1 space-y-4">
@@ -216,13 +388,38 @@ export default function ProductDetail() {
           </div>
           <div className="card">
              <h3 className="text-lg font-semibold mb-4 flex items-center"><Tag className="w-5 h-5 mr-2" /> Current Prices</h3>
-             <div className="space-y-3">
-               {product.prices.length > 0 ? product.prices.map(price => (
-                 <div key={price.source_name} className="flex justify-between items-center gap-2">
-                   <a href={price.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-sm truncate flex-1" title={price.source_name}>{price.source_name}</a>
-                   <span className="font-bold text-lg whitespace-nowrap">₹{price.current_price.toLocaleString()}</span>
-                 </div>
-               )) : <p className="text-sm text-gray-500">No current price information available.</p>}
+             <div className="space-y-4">
+               {product.prices.length > 0 ? product.prices.map(price => {
+                   const sellerTrustInfo = getSellerTrustLevel(price.seller_rating, price.seller_review_count);
+                   return (
+                     <div key={`${price.source_name}-${price.url}`} className="pb-3 border-b border-gray-100 dark:border-gray-800 last:border-b-0 last:pb-0">
+                       <div className="flex justify-between items-center gap-2 mb-1">
+                         <a href={price.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-sm truncate flex-1 font-medium" title={price.source_name}>{price.source_name}</a>
+                         <span className="font-bold text-lg whitespace-nowrap">₹{price.current_price.toLocaleString()}</span>
+                       </div>
+                       {(price.seller_name || price.seller_rating || sellerTrustInfo.level !== 'unknown') && (
+                         <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                            {price.seller_name && <div>Sold by: {price.seller_name}</div>}
+                            <div className="flex items-center space-x-2 flex-wrap">
+                                {price.seller_rating && (
+                                <span className="flex items-center space-x-1">
+                                    <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
+                                    <span>{price.seller_rating}</span>
+                                    {/* Make sure seller_review_count is treated as string before toLocaleString */}
+                                    {price.seller_review_count && <span>({parseReviewCount(price.seller_review_count)?.toLocaleString() ?? price.seller_review_count})</span>}
+                                </span>
+                                )}
+                                <SellerTrustIndicator trustInfo={sellerTrustInfo} />
+                           </div>
+                         </div>
+                       )}
+                     </div>
+                   );
+               }) : <p className="text-sm text-gray-500">No current price information available.</p>}
+             </div>
+             {/* Domain Trust Badge */}
+             <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <TrustBadge scoreData={scamScore} isLoading={isScamScoreLoading} />
              </div>
           </div>
         </div>
@@ -234,18 +431,18 @@ export default function ProductDetail() {
             <div className="flex items-baseline space-x-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
                 <span className="text-sm text-gray-500">Lowest Ever (since tracking):</span>
                 <span className="text-3xl font-bold text-green-600 dark:text-green-400">
-                  ₹{product.lowest_ever_price?.toLocaleString() || (latestPriceInfo ? latestPriceInfo.current_price.toLocaleString() : 'N/A')}
+                  ₹{product.lowest_ever_price?.toLocaleString() || (latestPriceInfoForOverview ? latestPriceInfoForOverview.current_price.toLocaleString() : 'N/A')}
                 </span>
             </div>
           </div>
-          
+
           <div className="card">
             <h3 className="text-lg font-semibold mb-4 flex items-center"><BarChart2 className="w-5 h-5 mr-2" /> Price History (Last 30 Days)</h3>
             {history.length > 1 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <LineChart data={history} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="date" /> 
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb dark:stroke-gray-700" />
+                  <XAxis dataKey="date" />
                   <YAxis domain={['dataMin - 100', 'dataMax + 100']} allowDecimals={false}/>
                   <Tooltip />
                   <Legend />
@@ -262,7 +459,7 @@ export default function ProductDetail() {
         </div>
       </div>
 
-      {/* Danger Zone -- THIS IS THE FIX --- */}
+      {/* Danger Zone */}
       <div className="card border-red-500/30 dark:border-red-500/50 mt-8">
         <h3 className="text-lg font-semibold text-red-700 dark:text-red-400 flex items-center space-x-2">
           <AlertTriangle className="w-5 h-5" />

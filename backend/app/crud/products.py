@@ -53,13 +53,14 @@ def get_product_with_prices(db: Session, product_id: int):
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
         return None
-    
+
     prices = []
     for ps in product.product_sources:
+        # Get the most recent price log for this product source
         latest_price = db.query(PriceLog).filter(
             PriceLog.product_source_id == ps.id
         ).order_by(desc(PriceLog.scraped_at)).first()
-        
+
         if latest_price:
             prices.append({
                 "source_name": ps.source.site_name,
@@ -67,13 +68,19 @@ def get_product_with_prices(db: Session, product_id: int):
                 "currency": latest_price.currency,
                 "availability": latest_price.availability,
                 "in_stock": latest_price.in_stock,
-                "url": ps.url
+                "url": ps.url,
+                "seller_name": latest_price.seller_name,
+                "seller_rating": latest_price.seller_rating,
+                "seller_review_count": latest_price.seller_review_count,
+                # --- ADD Sentiment ---
+                "avg_review_sentiment": latest_price.avg_review_sentiment
+                # --- End Sentiment ---
             })
-    
+
     return {"product": product, "prices": prices}
 
 def delete_all_products(db: Session) -> int:
     """Deletes all products from the database and returns the count."""
     num_deleted = db.query(Product).delete()
-    db.commit() # Make sure this commit is present
+    db.commit()
     return num_deleted

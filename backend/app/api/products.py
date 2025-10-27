@@ -9,11 +9,11 @@ from ..schemas.price import PriceHistory
 from ..schemas.extension import ProductDataFromExtension # Added missing import
 from ..crud import products as crud_products
 from ..crud import prices as crud_prices
-from ..models import Product, Source, ProductSource, PriceLog # Added missing Product, PriceLog
+from ..models import Product, Source, ProductSource, PriceLog, ScamScore # <-- 1. Import ScamScore
 from ..crud import watchlist as crud_watchlist # Import watchlist crud
 from ..schemas.watchlist import WatchlistCreate # Import watchlist schema
 # Corrected Imports End Here
-from ..utils.scraper_queue import enqueue_scrape
+from ..utils.scraper_queue import enqueue_scrape, enqueue_scam_check # <-- 2. Import enqueue_scam_check
 
 router = APIRouter()
 
@@ -54,6 +54,17 @@ async def add_product_from_extension(product_data: ProductDataFromExtension, db:
     # Find or create the source
     parsed_url = urlparse(product_data.url)
     domain = parsed_url.netloc.replace('www.', '')
+
+    # --- 3. Enqueue Scam Check (if domain is new) ---
+    try:
+        existing_scam_score = db.query(ScamScore).filter(ScamScore.domain == domain).first()
+        if not existing_scam_score:
+            enqueue_scam_check(domain)
+            print(f"Enqueued scam check job for new domain: {domain}")
+    except Exception as e:
+        print(f"Failed to enqueue scam check job for {domain}: {e}")
+    # --- End of Scam Check ---
+    
     source = db.query(Source).filter(Source.domain == domain).first()
     if not source:
         source = Source(domain=domain, site_name=domain.split('.')[0].title())
@@ -134,6 +145,16 @@ async def track_product(product: ProductCreate, db: Session = Depends(get_db)):
 
     parsed_url = urlparse(product.url)
     domain = parsed_url.netloc.replace('www.', '')
+
+    # --- 4. Enqueue Scam Check (if domain is new) ---
+    try:
+        existing_scam_score = db.query(ScamScore).filter(ScamScore.domain == domain).first()
+        if not existing_scam_score:
+            enqueue_scam_check(domain)
+            print(f"Enqueued scam check job for new domain: {domain}")
+    except Exception as e:
+        print(f"Failed to enqueue scam check job for {domain}: {e}")
+    # --- End of Scam Check ---
 
     source = db.query(Source).filter(Source.domain == domain).first()
     if not source:

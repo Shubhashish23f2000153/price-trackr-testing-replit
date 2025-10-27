@@ -4,13 +4,15 @@ from .price_log import PriceLog
 from .watchlist import Watchlist
 from .scam_score import ScamScore
 from .sale import Sale
+from .user import User # <-- ADD THIS LINE to import User
 
 __all__ = [
     "Product",
-    "Source", 
+    "Source",
     "ProductSource",
     "PriceLog",
     "Watchlist",
     "ScamScore",
-    "Sale"
+    "Sale",
+    "User" # <-- ADD THIS LINE to export User
 ]

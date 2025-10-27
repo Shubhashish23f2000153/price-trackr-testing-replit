@@ -13,7 +13,7 @@ class ProductBase(BaseModel):
 
 
 class ProductCreate(ProductBase):
-    url: str  # Initial URL to scrape
+    url: str
 
 
 class ProductUpdate(BaseModel):
@@ -28,7 +28,7 @@ class ProductResponse(ProductBase):
     id: int
     created_at: datetime
     updated_at: Optional[datetime] = None
-    
+
     class Config:
         from_attributes = True
 
@@ -42,6 +42,12 @@ class PriceInfo(BaseModel):
     url: str
     lowest_price: Optional[float] = None
     highest_price: Optional[float] = None
+    seller_name: Optional[str] = None
+    seller_rating: Optional[str] = None
+    seller_review_count: Optional[str] = None
+    # --- ADD Sentiment Field ---
+    avg_review_sentiment: Optional[float] = None # Added Optional float field
+    # --- End Sentiment Field ---
 
 
 class ProductDetail(ProductResponse):

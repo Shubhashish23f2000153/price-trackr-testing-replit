@@ -4,16 +4,25 @@ from ..config import settings
 
 redis_conn = Redis.from_url(settings.REDIS_URL)
 scraper_queue = Queue("scraping", connection=redis_conn)
-
+scam_queue = Queue("scam_checks", connection=redis_conn) # <-- NEW QUEUE
 
 def enqueue_scrape(url: str, product_id: int, source_id: int):
     """Enqueue a scraping job"""
-    # MODIFIED: Pass all arguments to the worker task
     job = scraper_queue.enqueue(
-        'playwright_scraper.runner.scrape_and_save_product', # Renamed task
+        'playwright_scraper.runner.scrape_and_save_product',
         url,
         product_id,
         source_id,
+        job_timeout='5m'
+    )
+    return job.id
+
+# --- NEW FUNCTION ---
+def enqueue_scam_check(domain: str):
+    """Enqueue a scam check job"""
+    job = scam_queue.enqueue(
+        'playwright_scraper.runner.compute_scam_score',
+        domain,
         job_timeout='5m'
     )
     return job.id
