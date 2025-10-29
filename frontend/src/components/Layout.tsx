@@ -1,15 +1,38 @@
-import { Link, useLocation } from 'react-router-dom'
-import { LayoutDashboard, ListChecks, Plus, Tag, Settings, User, LogOut, LogIn } from 'lucide-react'
-import { useAuth } from '../context/AuthContext' // Import useAuth
+import { Link, useLocation } from 'react-router-dom';
+import { LayoutDashboard, ListChecks, Plus, Tag, Settings, User, LogOut, LogIn } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { useWebSocket } from '../hooks/useWebSocket';
+import { useEffect } from 'react';
 
 interface LayoutProps {
-  children: React.ReactNode
-  // REMOVED darkMode and setDarkMode from here
+  children: React.ReactNode;
 }
 
-export default function Layout({ children }: LayoutProps) { // REMOVED from function signature
-  const location = useLocation()
-  const { user, logout } = useAuth() // Get user and logout from context
+export default function Layout({ children }: LayoutProps) {
+  const location = useLocation();
+  const { user, logout, getAuthIdentifier } = useAuth();
+  const { lastMessage } = useWebSocket();
+
+  useEffect(() => {
+    if (lastMessage && lastMessage.type === 'PRICE_ALERT') {
+      const currentIdentifier = getAuthIdentifier();
+
+      // --- ADD THIS CHECK ---
+      // Get the setting from localStorage (default to true if not found)
+      const alertsEnabled = localStorage.getItem('priceDropAlertsEnabled') !== 'false';
+
+      // Only show alert if it's for this user AND alerts are enabled
+      if (alertsEnabled && lastMessage.user_id === currentIdentifier) {
+      // --- END CHECK ---
+
+        // (We can improve this later with a nicer notification component)
+        alert(
+          `🔔 PRICE ALERT! 🔔\n\nA product on your watchlist has dropped in price!\n\nProduct ID: ${lastMessage.product_id}\nPrice: ₹${lastMessage.current_price}\nYour Alert: Below ₹${lastMessage.alert_price}`
+        );
+      }
+    }
+  }, [lastMessage, getAuthIdentifier]); // Added getAuthIdentifier dependency
+
 
   const navItems = [
     { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -17,7 +40,7 @@ export default function Layout({ children }: LayoutProps) { // REMOVED from func
     { path: '/add', icon: Plus, label: 'Add' },
     { path: '/sales', icon: Tag, label: 'Sales' },
     { path: '/settings', icon: Settings, label: 'Settings' },
-  ]
+  ];
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -32,7 +55,6 @@ export default function Layout({ children }: LayoutProps) { // REMOVED from func
               <h1 className="text-xl font-semibold">PriceTrackr</h1>
             </div>
             
-            {/* MODIFIED: Show user email or login button */}
             <div className="flex items-center space-x-4">
               {user ? (
                 <>
@@ -58,8 +80,8 @@ export default function Layout({ children }: LayoutProps) { // REMOVED from func
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex space-x-8">
             {navItems.map((item) => {
-              const Icon = item.icon
-              const isActive = location.pathname === item.path
+              const Icon = item.icon;
+              const isActive = location.pathname === item.path;
               return (
                 <Link
                   key={item.path}
@@ -73,7 +95,7 @@ export default function Layout({ children }: LayoutProps) { // REMOVED from func
                   <Icon className="w-4 h-4" />
                   <span>{item.label}</span>
                 </Link>
-              )
+              );
             })}
           </div>
         </div>
@@ -86,7 +108,7 @@ export default function Layout({ children }: LayoutProps) { // REMOVED from func
         </div>
       </main>
 
-      {/* Footer (remains the same) */}
+      {/* Footer */}
       <footer className="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 py-4">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-sm text-gray-600 dark:text-gray-400">
           <p>All prices displayed are approximate and sourced from publicly available information</p>
@@ -94,5 +116,5 @@ export default function Layout({ children }: LayoutProps) { // REMOVED from func
         </div>
       </footer>
     </div>
-  )
+  );
 }

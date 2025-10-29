@@ -123,6 +123,7 @@ export interface ScamScore {
 
 // Products API
 export const getProducts = async (skip = 0, limit = 100): Promise<Product[]> => {
+  // We can increase the default limit here if needed, or pass a large number when calling
   const response = await api.get('/products/', { params: { skip, limit } });
   return response.data;
 };
@@ -218,5 +219,14 @@ export const getScamScore = async (domain: string): Promise<ScamScore> => {
   const response = await api.get('/scam/check', { params: { domain } });
   return response.data;
 };
+
+// --- ADD THIS NEW FUNCTION ---
+export const deleteUser = async () => {
+  // Uses the DELETE /users/me endpoint we created
+  // Requires the user to be logged in (Authorization header is set by setAuthToken)
+  const response = await api.delete('/users/me');
+  return response.data; // Should return {"message": "User account deleted successfully"}
+};
+// --- END NEW FUNCTION ---
 
 export default api;

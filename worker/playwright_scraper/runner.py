@@ -253,7 +253,94 @@ def compute_scam_score(domain: str):
                  existing_score.last_checked = datetime.now(timezone.utc) # Update check time even on error
                  db.commit()
             return
+        
+# --- 4. Price Alert Check Task ---
+def check_price_alerts():
+    """
+    Worker task to check all active price alerts against the latest prices.
+    """
+    print("[Worker] Checking all active price alerts...")
+    
+    # We need to import Watchlist and Product here
+    # Make sure they are imported from the models
+    from sqlalchemy import select, desc
+    
+    # These models are already defined at the top of your file,
+    # but we need Watchlist and ProductSource
+    class ProductSource(Base):
+        __tablename__ = "product_sources"
+        id = Column(Integer, primary_key=True, index=True)
+        product_id = Column(Integer, nullable=False)
+        url = Column(Text, nullable=True)
 
+    class Watchlist(Base):
+        __tablename__ = "watchlists"
+        id = Column(Integer, primary_key=True, index=True)
+        user_id = Column(String(100), nullable=True)
+        product_id = Column(Integer, nullable=False)
+        alert_rules = Column(JSON, nullable=True)
+
+    
+    triggered_alerts = 0
+    with get_db_session() as db:
+        # 1. Get all watchlist items that have an alert rule
+        items_to_check = db.query(Watchlist).filter(
+            Watchlist.alert_rules != None
+        ).all()
+        
+        print(f"[Worker] Found {len(items_to_check)} watchlist items with alert rules.")
+        
+        for item in items_to_check:
+            try:
+                alert_price = item.alert_rules.get("threshold")
+                if not alert_price:
+                    continue
+                
+                # 2. Find all sources for this product
+                product_sources = db.query(ProductSource).filter(
+                    ProductSource.product_id == item.product_id
+                ).all()
+
+                if not product_sources:
+                    continue
+
+                # 3. Find the lowest current price for this product
+                lowest_current_price = None
+                for ps in product_sources:
+                    latest_price_log = db.query(PriceLog).filter(
+                        PriceLog.product_source_id == ps.id
+                    ).order_by(desc(PriceLog.scraped_at)).first()
+                    
+                    if latest_price_log:
+                        current_price = latest_price_log.price_cents / 100
+                        if lowest_current_price is None or current_price < lowest_current_price:
+                            lowest_current_price = current_price
+                
+                # 4. Check if the alert is triggered
+                if lowest_current_price and lowest_current_price <= alert_price:
+                    print(f"[Worker]  TRIGGER! Product {item.product_id} is {lowest_current_price}, below alert of {alert_price} for user {item.user_id}")
+                    
+                    # 5. Publish an alert message
+                    # We can re-use the 'price_updates' channel
+                    alert_message = json.dumps({
+                        "type": "PRICE_ALERT",
+                        "product_id": item.product_id,
+                        "user_id": item.user_id, # So the frontend knows who to notify
+                        "current_price": lowest_current_price,
+                        "alert_price": alert_price
+                    })
+                    redis_conn.publish("price_updates", alert_message)
+                    triggered_alerts += 1
+                    
+                    # Optional: Remove the alert rule so it doesn't fire again
+                    # item.alert_rules = None
+                    # db.commit()
+
+            except Exception as e:
+                print(f"[Worker] Error checking alert for item {item.id}: {e}")
+                
+    print(f"[Worker] Finished alert check. Triggered {triggered_alerts} alerts.")
+    return triggered_alerts
 
 # --- Main Worker Execution ---
 if __name__ == "__main__":
@@ -267,8 +354,9 @@ if __name__ == "__main__":
     # Create queues
     scraper_queue = Queue("scraping", connection=redis_conn)
     scam_queue = Queue("scam_checks", connection=redis_conn)
+    alert_queue = Queue("alerts", connection=redis_conn) # <-- ADD THIS
     
-    # Start worker for both queues
-    worker = Worker([scraper_queue, scam_queue], connection=redis_conn)
-    print("🚀 Scraper worker started... Listening for jobs on 'scraping' and 'scam_checks'.")
+    # Start worker for all queues
+    worker = Worker([scraper_queue, scam_queue, alert_queue], connection=redis_conn) # <-- ADD alert_queue
+    print("🚀 Scraper worker started... Listening for jobs on 'scraping', 'scam_checks', and 'alerts'.")
     worker.work()
