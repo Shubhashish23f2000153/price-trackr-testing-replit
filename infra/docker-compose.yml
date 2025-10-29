@@ -40,8 +40,11 @@ services:
       context: ../backend
       dockerfile: Dockerfile
     container_name: pricetrackr-backend
+    volumes: # <-- ADD THIS LINE
+      - ../backend:/app # <-- AND THIS LINE
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-pricetrackr}:${POSTGRES_PASSWORD:-testpassword}@postgres:5432/${POSTGRES_DB:-pricetrackr}
+# ... (rest of the service)
       REDIS_URL: redis://redis:6379/0
       CORS_ORIGINS: http://localhost:5000,http://localhost:3000
     ports:
@@ -60,9 +63,11 @@ services:
       context: ../worker
       dockerfile: Dockerfile
     container_name: pricetrackr-worker
+    volumes: # <-- ADD THIS LINE
+      - ../worker:/app # <-- AND THIS LINE
     environment:
       REDIS_URL: redis://redis:6379/0
-      DATABASE_URL: postgresql://${POSTGRES_USER:-pricetrackr}:${POSTGRES_PASSWORD:-testpassword}@postgres:5432/${POSTGRES_DB:-pricetrackr}
+# ... (rest of the service)
     depends_on:
       redis:
         condition: service_healthy
