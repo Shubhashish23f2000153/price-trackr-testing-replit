@@ -8,7 +8,8 @@ def get_user_by_email(db: Session, email: str):
     return db.query(User).filter(User.email == email).first()
 
 def create_user(db: Session, user: UserCreate):
-    hashed_password = get_password_hash(user.password)
+    # This line prevents the crash, no matter what the browser sends
+    hashed_password = get_password_hash(user.password[:72]) 
     db_user = User(
         email=user.email,
         hashed_password=hashed_password,

@@ -81,7 +81,8 @@ export default function Register() {
               onChange={(e) => setPassword(e.target.value)}
               className="input"
               required
-              minLength={6} // Optional: Add password requirements
+              minLength={6}
+              maxLength={72} // Optional: Add password requirements
               disabled={isLoading}
             />
           </div>
