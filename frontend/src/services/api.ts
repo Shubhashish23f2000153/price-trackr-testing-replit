@@ -51,9 +51,7 @@ export interface PriceInfo {
   seller_name?: string | null;
   seller_rating?: string | null;
   seller_review_count?: string | null;
-  // --- ADDED Sentiment Field ---
   avg_review_sentiment?: number | null; // Added Optional number field
-  // --- End Sentiment Field ---
 }
 
 export interface ProductDetail extends Product {
@@ -67,6 +65,12 @@ export interface PriceHistoryItem {
     price: number;
     source: string;
 }
+
+// --- NEW INTERFACE FOR EXPORT ---
+export interface ProductWithHistory extends Product {
+  price_history: PriceHistoryItem[];
+}
+// --- END NEW INTERFACE ---
 
 export interface Watchlist {
   id: number;
@@ -123,7 +127,6 @@ export interface ScamScore {
 
 // Products API
 export const getProducts = async (skip = 0, limit = 100): Promise<Product[]> => {
-  // We can increase the default limit here if needed, or pass a large number when calling
   const response = await api.get('/products/', { params: { skip, limit } });
   return response.data;
 };
@@ -147,6 +150,13 @@ export const deleteProduct = async (productId: number) => {
   const response = await api.delete(`/products/${productId}`);
   return response.data;
 };
+
+// --- NEW EXPORT FUNCTION ---
+export const exportAllData = async (): Promise<ProductWithHistory[]> => {
+  const response = await api.get('/products/export');
+  return response.data;
+};
+// --- END NEW FUNCTION ---
 
 // Watchlist API
 export const getWatchlist = async (): Promise<Watchlist[]> => {
@@ -220,13 +230,13 @@ export const getScamScore = async (domain: string): Promise<ScamScore> => {
   return response.data;
 };
 
-// --- ADD THIS NEW FUNCTION ---
+// --- DELETE USER FUNCTION ---
 export const deleteUser = async () => {
   // Uses the DELETE /users/me endpoint we created
   // Requires the user to be logged in (Authorization header is set by setAuthToken)
   const response = await api.delete('/users/me');
   return response.data; // Should return {"message": "User account deleted successfully"}
 };
-// --- END NEW FUNCTION ---
+// --- END DELETE USER FUNCTION ---
 
 export default api;

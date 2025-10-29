@@ -1,6 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Sun, Bell, Shield, Download, Trash2, AlertTriangle, MapPin, UserX } from 'lucide-react';
-import { getSpaceStats, deleteAllProducts, getProducts, Product, deleteUser, getPriceHistory, PriceHistoryItem } from '../services/api';
+// --- THIS IS THE CORRECTED IMPORT LINE ---
+import { 
+  getSpaceStats, 
+  deleteAllProducts, 
+  deleteUser,  // Added back
+  exportAllData, // Our new function
+  ProductWithHistory // Our new type from api.ts
+} from '../services/api';
 import { useNavigate } from 'react-router-dom';
 import { countries } from '../utils/regionalData';
 import { useAuth } from '../context/AuthContext';
@@ -11,10 +18,8 @@ interface SettingsProps {
   setDarkMode: (value: boolean) => void;
 }
 
-// Interface for the combined export data structure
-interface ProductWithHistory extends Product {
-  price_history: PriceHistoryItem[];
-}
+// --- DELETED THE CONFLICTING INTERFACE ---
+// The local 'ProductWithHistory' interface that was here is removed.
 
 // --- ToggleSwitchProps Interface ---
 interface ToggleSwitchProps {
@@ -26,7 +31,6 @@ interface ToggleSwitchProps {
 
 // --- CORRECTED ToggleSwitch Component ---
 function ToggleSwitch({ label, description, enabled, setEnabled }: ToggleSwitchProps) {
-  // The 'return' statement needs to be INSIDE the function body
   return (
     <div className="flex items-center justify-between">
       <div>
@@ -46,7 +50,7 @@ function ToggleSwitch({ label, description, enabled, setEnabled }: ToggleSwitchP
       </button>
     </div>
   );
-} // <-- Added the missing closing brace
+}
 
 
 // --- Settings Component ---
@@ -98,7 +102,7 @@ export default function Settings({ darkMode, setDarkMode }: SettingsProps) {
     }
     if (window.confirm("DANGER ZONE:\nAre you absolutely sure you want to permanently delete your account and all associated data?\nThis action cannot be undone.")) {
       try {
-        const result = await deleteUser();
+        const result = await deleteUser(); // This line is now valid
         alert(result.message);
         logout();
         navigate('/login');
@@ -110,26 +114,21 @@ export default function Settings({ darkMode, setDarkMode }: SettingsProps) {
     }
   };
 
+  // --- UPDATED EXPORT FUNCTION ---
   const handleExportData = async () => {
     setIsExporting(true);
-    alert("Starting data export. This may take a while depending on the number of products tracked.");
+    alert("Starting data export. This may take a moment...");
     try {
-      const allProducts: Product[] = await getProducts(0, 10000);
-      if (!allProducts || allProducts.length === 0) {
+      // ONE single API call
+      const productsWithHistory: ProductWithHistory[] = await exportAllData();
+
+      if (!productsWithHistory || productsWithHistory.length === 0) {
         alert("No products found to export.");
         setIsExporting(false);
         return;
       }
-      const productsWithHistory: ProductWithHistory[] = [];
-      for (const product of allProducts) {
-        try {
-          const history = await getPriceHistory(product.id);
-          productsWithHistory.push({ ...product, price_history: history });
-        } catch (historyError) {
-          console.error(`Failed to fetch history for product ${product.id}:`, historyError);
-          productsWithHistory.push({ ...product, price_history: [] });
-        }
-      }
+
+      // The rest of the download logic is the same
       const jsonData = JSON.stringify(productsWithHistory, null, 2);
       const blob = new Blob([jsonData], { type: 'application/json' });
       const link = document.createElement('a');
@@ -139,6 +138,7 @@ export default function Settings({ darkMode, setDarkMode }: SettingsProps) {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(link.href);
+
     } catch (error) {
       console.error("Failed to export data:", error);
       alert("Failed to export data. Please try again.");

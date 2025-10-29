@@ -1,7 +1,9 @@
 from pydantic import BaseModel, HttpUrl
 from typing import Optional, List
 from datetime import datetime
+from .price import PriceHistory # <-- ADDED IMPORT
 
+# --- BASE SCHEMAS (Must be defined first) ---
 
 class ProductBase(BaseModel):
     title: str
@@ -45,12 +47,17 @@ class PriceInfo(BaseModel):
     seller_name: Optional[str] = None
     seller_rating: Optional[str] = None
     seller_review_count: Optional[str] = None
-    # --- ADD Sentiment Field ---
-    avg_review_sentiment: Optional[float] = None # Added Optional float field
-    # --- End Sentiment Field ---
+    avg_review_sentiment: Optional[float] = None
 
+
+# --- COMPOUND SCHEMAS (Can now inherit safely) ---
 
 class ProductDetail(ProductResponse):
     prices: List[PriceInfo] = []
     lowest_ever_price: Optional[float] = None
     is_in_watchlist: bool = False
+
+
+# --- NEW EXPORT SCHEMA (Added at the end) ---
+class ProductWithHistorySchema(ProductResponse):
+    price_history: List[PriceHistory] = []

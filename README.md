@@ -132,7 +132,7 @@ python playwright_scraper/runner.py
 
 ```env
 # Database
-DATABASE_URL=postgresql://user:password@postgres:5432/pricetrackr
+DATABASE_URL=postgresql://user:testpassword@postgres:5432/pricetrackr
 
 # Redis
 REDIS_URL=redis://redis:6379/0

@@ -4,7 +4,7 @@ from typing import Optional
 
 class Settings(BaseSettings):
     # Database
-    DATABASE_URL: str = "postgresql://pricetrackr:pricetrackr_password@localhost:5432/pricetrackr"
+    DATABASE_URL: str = "postgresql://pricetrackr:testpassword@localhost:5432/pricetrackr"
     
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"

@@ -24,7 +24,7 @@ from playwright_scraper.scrapers import get_scraper
 
 # --- 1. Load Environment & Database Setup ---
 load_dotenv()
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://pricetrackr:pricetrackr_password@localhost:5432/pricetrackr")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://pricetrackr:testpassword@localhost:5432/pricetrackr")
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
 # Setup database connection

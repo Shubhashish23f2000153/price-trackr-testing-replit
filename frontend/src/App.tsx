@@ -1,3 +1,4 @@
+// frontend/src/App.tsx
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import Layout from './components/Layout'
@@ -8,7 +9,8 @@ import Sales from './pages/Sales'
 import Settings from './pages/Settings'
 import ProductDetail from './pages/ProductDetail'
 import AllProducts from './pages/AllProducts';
-import Login from './pages/Login'; // Import Login
+import Login from './pages/Login';
+import Register from './pages/Register'; // <-- 1. Import Register
 
 function App() {
   const [darkMode, setDarkMode] = useState(() => {
@@ -27,18 +29,17 @@ function App() {
 
   return (
     <Router>
-      {/* --- FIX: Removed darkMode and setDarkMode props from Layout --- */}
       <Layout>
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/watchlist" element={<Watchlist />} />
           <Route path="/add" element={<AddProduct />} />
           <Route path="/sales" element={<Sales />} />
-          {/* Props are still correctly passed to Settings */}
           <Route path="/settings" element={<Settings darkMode={darkMode} setDarkMode={setDarkMode} />} />
           <Route path="/product/:productId" element={<ProductDetail />} />
           <Route path="/all-products" element={<AllProducts />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} /> {/* <-- 2. Add Register Route */}
         </Routes>
       </Layout>
     </Router>
