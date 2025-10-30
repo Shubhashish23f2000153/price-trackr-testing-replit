@@ -20,6 +20,12 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 30
     
+    # --- ADD VAPID KEYS ---
+    VAPID_PUBLIC_KEY: str = "BPF_f-g2b3-lJj8-O0-lJj8-O0-lJj8-O0-lJj8-O0-lJj8-O0-lJj8-O0-lJj8-O0-lJj8-O0-lJj8-O0-lJj8-O0"
+    VAPID_PRIVATE_KEY: str = "your-private-vapid-key-goes-here"
+    VAPID_CLAIMS_EMAIL: str = "mailto:admin@yourdomain.com"
+    # --- END VAPID KEYS ---
+    
     # Scraper
     USER_AGENT: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
     SCRAPER_DELAY_MIN: int = 2

@@ -1,6 +1,6 @@
 # backend/app/schemas/user_schema.py
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Optional, Dict, Any # <-- Import Dict, Any
 from datetime import datetime
 
 # Base model for user properties
@@ -34,3 +34,8 @@ class Token(BaseModel):
 # Schema for token data (payload)
 class TokenData(BaseModel):
     email: Optional[str] = None
+
+# --- ADD THIS NEW SCHEMA ---
+class PushSubscriptionCreate(BaseModel):
+    subscription: Optional[Dict[str, Any]] = None
+# --- END NEW SCHEMA ---    

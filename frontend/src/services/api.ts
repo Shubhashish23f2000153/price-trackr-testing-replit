@@ -2,6 +2,8 @@ import axios from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
+const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -238,5 +240,18 @@ export const deleteUser = async () => {
   return response.data; // Should return {"message": "User account deleted successfully"}
 };
 // --- END DELETE USER FUNCTION ---
+
+export const updatePushSubscription = async (
+  subscription: PushSubscriptionJSON | null
+): Promise<UserResponse> => {
+  // Uses the POST /users/subscribe endpoint we created
+  const response = await api.post('/users/subscribe', { subscription });
+  return response.data;
+};
+// --- END NEW FUNCTION ---
+
+// --- EXPORT THE VAPID KEY ---
+export { VAPID_PUBLIC_KEY };
+// --- END EXPORT ---
 
 export default api;

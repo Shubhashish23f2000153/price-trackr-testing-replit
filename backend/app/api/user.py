@@ -4,7 +4,7 @@ from datetime import timedelta
 from typing import Optional
 
 from ..database import get_db
-from ..schemas.user_schema import UserCreate, UserResponse, UserLogin, Token
+from ..schemas.user_schema import UserCreate, UserResponse, UserLogin, Token, PushSubscriptionCreate
 from ..crud import user as user_crud
 from ..crud import watchlist as crud_watchlist
 from ..utils import auth
@@ -57,6 +57,24 @@ async def merge_anonymous_data(
         "message": "Data merged successfully",
         "merged_items": merged_count
     }
+
+@router.post("/subscribe", response_model=UserResponse)
+async def update_push_subscription(
+    subscription: PushSubscriptionCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Save or remove a push notification subscription for the logged-in user.
+    Send `{"subscription": null}` to remove.
+    """
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    current_user.push_subscription = subscription.subscription
+    db.commit()
+    db.refresh(current_user)
+    return current_user
 
 # --- ADD THIS NEW ENDPOINT ---
 @router.delete("/me", status_code=status.HTTP_200_OK)

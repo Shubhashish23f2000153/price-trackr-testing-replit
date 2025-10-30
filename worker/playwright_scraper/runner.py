@@ -4,7 +4,7 @@ import json
 from redis import Redis
 from rq import Worker, Queue
 from dotenv import load_dotenv
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Boolean, ForeignKey, Float # Import Float
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Boolean, ForeignKey, Float, JSON # Import Float
 from sqlalchemy.orm import sessionmaker, relationship, declarative_base
 from sqlalchemy.sql import func
 from contextlib import contextmanager
@@ -13,8 +13,11 @@ from datetime import datetime, timezone, timedelta
 from typing import List # Import List
 from playwright_scraper.sales_discovery import discover_all_sales # <-- IMPORT YOUR NEW SCRIPT
 
+from pywebpush import webpush, WebPushException
+
 # --- ADD VADER IMPORT ---
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+from playwright_scraper.scrapers import get_scraper
 # --- END VADER IMPORT ---
 
 
@@ -32,6 +35,12 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(100), unique=True, index=True, nullable=False)
+    push_subscription = Column(JSON, nullable=True) # <-- Add this
 
 # --- 2. Define Minimal Database Models ---
 class Product(Base):
@@ -281,10 +290,9 @@ def check_price_alerts():
     class Watchlist(Base):
         __tablename__ = "watchlists"
         id = Column(Integer, primary_key=True, index=True)
-        user_id = Column(String(100), nullable=True)
+        user_id = Column(String(100), nullable=True) # This is the user's email
         product_id = Column(Integer, nullable=False)
         alert_rules = Column(JSON, nullable=True)
-
     
     triggered_alerts = 0
     with get_db_session() as db:
@@ -298,18 +306,15 @@ def check_price_alerts():
         for item in items_to_check:
             try:
                 alert_price = item.alert_rules.get("threshold")
-                if not alert_price:
+                user_email = item.user_id # This is the email
+                
+                if not alert_price or not user_email:
                     continue
                 
                 # 2. Find all sources for this product
-                product_sources = db.query(ProductSource).filter(
-                    ProductSource.product_id == item.product_id
-                ).all()
-
-                if not product_sources:
-                    continue
-
-                # 3. Find the lowest current price for this product
+                product_sources = db.query(ProductSource).filter(ProductSource.product_id == item.product_id).all()
+                if not product_sources: continue
+                
                 lowest_current_price = None
                 for ps in product_sources:
                     latest_price_log = db.query(PriceLog).filter(
@@ -330,16 +335,46 @@ def check_price_alerts():
                     alert_message = json.dumps({
                         "type": "PRICE_ALERT",
                         "product_id": item.product_id,
-                        "user_id": item.user_id, # So the frontend knows who to notify
+                        "user_id": user_email,
                         "current_price": lowest_current_price,
                         "alert_price": alert_price
                     })
                     redis_conn.publish("price_updates", alert_message)
                     triggered_alerts += 1
-                    
-                    # Optional: Remove the alert rule so it doesn't fire again
-                    # item.alert_rules = None
-                    # db.commit()
+
+                    # --- 5. NEW: SEND PUSH NOTIFICATION ---
+                    user = db.query(User).filter(User.email == user_email).first()
+                    if user and user.push_subscription:
+                        print(f"[Worker]  Found push subscription for {user_email}. Sending push...")
+                        try:
+                            # Load VAPID keys from environment
+                            vapid_private_key = os.getenv("VAPID_PRIVATE_KEY")
+                            vapid_claims = {"sub": f"mailto:{os.getenv('VAPID_CLAIMS_EMAIL')}"}
+                            
+                            payload = json.dumps({
+                                "title": "Price Alert!",
+                                "body": f"Price for Product ID {item.product_id} dropped to ₹{lowest_current_price}!",
+                                "url": f"/product/{item.product_id}" # URL to open on click
+                            })
+
+                            webpush(
+                                subscription_info=user.push_subscription,
+                                data=payload,
+                                vapid_private_key=vapid_private_key,
+                                vapid_claims=vapid_claims
+                            )
+                            print(f"[Worker]  ✅ Push notification sent.")
+
+                        except WebPushException as ex:
+                            print(f"[Worker]  ❌ Error sending push: {ex}")
+                            # If subscription is invalid (e.g., 410 Gone), remove it
+                            if ex.response and ex.response.status_code in [404, 410]:
+                                print(f"[Worker]  Subscription for {user_email} is invalid. Removing.")
+                                user.push_subscription = None
+                                db.commit()
+                        except Exception as e:
+                            print(f"[Worker]  ❌ Unexpected error during webpush: {e}")
+                    # --- END PUSH NOTIFICATION ---
 
             except Exception as e:
                 print(f"[Worker] Error checking alert for item {item.id}: {e}")
