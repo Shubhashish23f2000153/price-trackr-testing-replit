@@ -346,7 +346,7 @@ export default function ProductDetail() {
       }
     } catch (error) {
       console.error("Failed to update watchlist:", error);
-      alert("Failed to update watchlist status.");
+      alert("Failed to update watchlist status."); // This is the alert you saw
     }
   };
 

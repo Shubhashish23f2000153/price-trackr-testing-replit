@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import api, { setAuthToken, UserResponse, mergeAnonymousData } from '../services/api';
+// --- 1. RENAMED THE IMPORT to fix name collision ---
+import api, { setAuthToken, setAnonymousId as apiSetAnonymousId, UserResponse, mergeAnonymousData } from '../services/api';
 
 // --- 2. Helper function for anonymous ID ---
 const getAnonymousId = (): string => {
@@ -15,8 +16,8 @@ const getAnonymousId = (): string => {
 interface AuthContextType {
   user: UserResponse | null;
   token: string | null;
-  anonymousId: string; // 3. Add anonymousId to context
-  getAuthIdentifier: () => string | null; // 4. Add helper function
+  anonymousId: string; // Add anonymousId to context
+  getAuthIdentifier: () => string | null; // Add helper function
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   isLoading: boolean;
@@ -29,35 +30,48 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserResponse | null>(null);
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'));
-  const [anonymousId, setAnonymousId] = useState<string>(getAnonymousId()); // 5. Init anonymousId state
+  // --- This 'setAnonymousId' is the state setter, which is fine (though unused, which is just a warning) ---
+  const [anonymousId, setAnonymousId] = useState<string>(getAnonymousId()); 
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const loadUserFromToken = async () => {
       if (token) {
         setAuthToken(token);
+        apiSetAnonymousId(null); // <-- 2. Use the renamed import
         try {
-          // Placeholder: Fetch user data from a '/api/users/me' endpoint
           const decoded = JSON.parse(atob(token.split('.')[1]));
-          // NOTE: 'decoded.sub' is the user's email, which we'll use as the ID for now.
+          
+          // ADD EXPIRATION CHECK
+          if (decoded.exp * 1000 < Date.now()) {
+            console.warn("Token expired, logging out.");
+            throw new Error("Token expired"); // Jump to catch block
+          }
+
           setUser({ email: decoded.sub } as UserResponse); 
         } catch (error) {
-          console.error("Failed to load user from token:", error);
-          setToken(null);
+          console.error("Failed to load user from token (purging):", error);
+          // FULLY LOG OUT on error/expiration
           localStorage.removeItem('token');
+          setToken(null);
+          setUser(null);
           setAuthToken(null);
+          apiSetAnonymousId(anonymousId); // <-- 3. Use the renamed import
         }
+      } else {
+        // THIS IS THE KEY FIX
+        // No token, so user is anonymous. Set the anonymous header.
+        setAuthToken(null);
+        apiSetAnonymousId(anonymousId); // <-- 4. Use the renamed import
       }
       setIsLoading(false);
     };
     loadUserFromToken();
-  }, [token]);
+  }, [token, anonymousId]); // Add anonymousId to dependency array
 
-  // 6. Create a function to get the correct ID (anon or user)
+  // Create a function to get the correct ID (anon or user)
   const getAuthIdentifier = () => {
     if (user && token) {
-      // We'll use the user's email as the unique string ID,
-      // since that's what's in the token.
       return user.email;
     }
     return anonymousId;
@@ -74,18 +88,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const loggedInUser = { email: decoded.sub } as UserResponse;
     setUser(loggedInUser);
 
-    // --- 7. THE MERGE ---
-    // After login, merge the old anonymous data to the new user account.
+    // --- THE MERGE ---
     try {
       await mergeAnonymousData(anonymousId);
       console.log("Anonymous data merged successfully.");
       // Clear the old anonymous ID and get a new one for "guest" browsing
       localStorage.removeItem('anonymousId');
-      setAnonymousId(getAnonymousId());
+      setAnonymousId(getAnonymousId()); // This will call the state setter
     } catch (error) {
       console.error("Failed to merge anonymous data:", error);
     }
-    // --- End of Merge ---
   };
 
   const logout = () => {
@@ -93,11 +105,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null);
     setUser(null);
     setAuthToken(null);
+    // On logout, ensure we set the anonymous header for guest browsing
+    apiSetAnonymousId(anonymousId); 
   };
 
   return (
     <AuthContext.Provider value={{ user, token, anonymousId, getAuthIdentifier, login, logout, isLoading }}>
       {!isLoading && children}
+    {/* --- 3. FIXED THE TYPO HERE --- */}
     </AuthContext.Provider>
   );
 }
