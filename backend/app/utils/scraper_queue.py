@@ -6,6 +6,7 @@ redis_conn = Redis.from_url(settings.REDIS_URL)
 scraper_queue = Queue("scraping", connection=redis_conn)
 scam_queue = Queue("scam_checks", connection=redis_conn)
 alert_queue = Queue("alerts", connection=redis_conn) # <-- ADD THIS
+sales_queue = Queue("sales_discovery", connection=redis_conn) # <-- ADD THIS
 
 def enqueue_scrape(url: str, product_id: int, source_id: int):
     """Enqueue a scraping job"""
@@ -35,3 +36,13 @@ def enqueue_alert_check():
         job_timeout='10m'
     )
     return job.id
+
+# --- ADD THIS NEW FUNCTION ---
+def enqueue_sales_discovery():
+    """Enqueue a job to check for new sales."""
+    job = sales_queue.enqueue(
+        'playwright_scraper.runner.run_sales_discovery_job',
+        job_timeout='15m'
+    )
+    return job.id
+# --- END NEW FUNCTION ---

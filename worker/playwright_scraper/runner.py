@@ -11,6 +11,7 @@ from contextlib import contextmanager
 import whois
 from datetime import datetime, timezone, timedelta
 from typing import List # Import List
+from playwright_scraper.sales_discovery import discover_all_sales # <-- IMPORT YOUR NEW SCRIPT
 
 # --- ADD VADER IMPORT ---
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
@@ -342,21 +343,32 @@ def check_price_alerts():
     print(f"[Worker] Finished alert check. Triggered {triggered_alerts} alerts.")
     return triggered_alerts
 
+def check_price_alerts():
+    # ... (existing function) ...
+    pass
+
+# --- ADD THIS NEW FUNCTION ---
+def run_sales_discovery_job():
+    """Worker task to discover and add new sales."""
+    print("[Worker] Running sales discovery job...")
+    try:
+        discover_all_sales()
+        print("[Worker] ✅ Sales discovery job complete.")
+    except Exception as e:
+        print(f"[Worker] ❌ CRITICAL ERROR in sales discovery: {e}")
+# --- END NEW FUNCTION ---
+
 # --- Main Worker Execution ---
 if __name__ == "__main__":
-    # Ensure database tables exist (useful for first run or after clearing volumes)
-    try:
-        Base.metadata.create_all(bind=engine)
-        print("Database tables verified/created.")
-    except Exception as e:
-        print(f"Error verifying/creating database tables: {e}")
+    # ... (existing code) ...
 
     # Create queues
     scraper_queue = Queue("scraping", connection=redis_conn)
     scam_queue = Queue("scam_checks", connection=redis_conn)
-    alert_queue = Queue("alerts", connection=redis_conn) # <-- ADD THIS
-    
+    alert_queue = Queue("alerts", connection=redis_conn)
+    sales_queue = Queue("sales_discovery", connection=redis_conn) # <-- ADD THIS NEW QUEUE
+
     # Start worker for all queues
-    worker = Worker([scraper_queue, scam_queue, alert_queue], connection=redis_conn) # <-- ADD alert_queue
-    print("🚀 Scraper worker started... Listening for jobs on 'scraping', 'scam_checks', and 'alerts'.")
+    worker = Worker([scraper_queue, scam_queue, alert_queue, sales_queue], connection=redis_conn) # <-- ADD IT HERE
+    print("🚀 Scraper worker started... Listening for jobs on 'scraping', 'scam_checks', 'alerts', and 'sales_discovery'.")
     worker.work()

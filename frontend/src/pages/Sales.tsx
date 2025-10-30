@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react';
 import { Tag, Calendar } from 'lucide-react';
-import { getSales, Sale } from '../services/api'; // Import the API function and type
+import { getSales, Sale } from '../services/api';
+import { format } from 'date-fns';
+import { Link } from 'react-router-dom'; // <-- ADD Link
+import { useAuth } from '../context/AuthContext'; // <-- ADD useAuth
 
 export default function Sales() {
   const [ongoingSales, setOngoingSales] = useState<Sale[]>([]);
   const [upcomingSales, setUpcomingSales] = useState<Sale[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('ongoing');
+  const { user } = useAuth(); // <-- ADD this line
 
   useEffect(() => {
     const fetchSalesData = async () => {
@@ -66,11 +70,13 @@ export default function Sales() {
         </button>
       </div>
 
-      {/* Sales Grid */}
+      {/* Sales Grid - Updated Logic */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {salesToDisplay.length > 0 ? (
+          // If there are sales in the current tab, display them
           salesToDisplay.map((sale) => (
             <div key={sale.id} className="card">
+              {/* ... (Keep the existing card content structure here) ... */}
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center space-x-2">
                   <Tag className="w-5 h-5 text-orange-500" />
@@ -80,31 +86,57 @@ export default function Sales() {
                 </div>
                 {sale.discount_percentage && (
                   <span className="text-2xl font-bold text-green-600 dark:text-green-400">
-                    {sale.discount_percentage}%
+                    {sale.discount_percentage.toFixed(0)}% {/* Format percentage */}
                   </span>
                 )}
               </div>
               <h3 className="font-semibold text-lg mb-2">{sale.title}</h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4 h-10 overflow-hidden"> {/* Limit description height */}
                 {sale.description}
               </p>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between mt-auto"> {/* Ensure button aligns bottom */}
                 <div className="flex items-center space-x-2 text-sm text-gray-500">
                   <Calendar className="w-4 h-4" />
-                  <span>
-                    {activeTab === 'ongoing' ? 'Ends' : 'Starts'}: {sale.end_date ? new Date(sale.end_date).toLocaleDateString() : 'N/A'}
+                   <span>
+                    {activeTab === 'ongoing'
+                      ? `Ends: ${sale.end_date ? format(new Date(sale.end_date), 'dd-MM-yy') : 'N/A'}`
+                      : `Starts: ${sale.start_date ? format(new Date(sale.start_date), 'dd-MM-yy') : 'N/A'}`
+                    }
                   </span>
                 </div>
-                <button className="btn-primary text-sm">View Sale</button>
+                {/* Link added previously */}
+                <a
+                  href={`https://${sale.source_domain}`} // Simple link to domain
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-primary text-sm"
+                >
+                  View Sale
+                </a>
               </div>
+               {/* ... (End of card content) ... */}
             </div>
           ))
+        ) : activeTab === 'ongoing' ? (
+          // If ONGOING tab is active AND empty
+          <div className="col-span-1 md:col-span-2 card text-center py-8 bg-gray-50 dark:bg-gray-800">
+            <p className="text-gray-600 dark:text-gray-400">No ongoing sales found right now.</p>
+            {!user && ( // Show login prompt only if user is not logged in
+              <p className="text-sm text-blue-600 dark:text-blue-400 mt-2">
+                <Link to="/login" className="font-medium hover:underline">Login</Link> or <Link to="/register" className="font-medium hover:underline">Sign up</Link> to get notified about upcoming deals!
+              </p>
+            )}
+             <p className="text-sm text-gray-500 mt-2">Check the 'Upcoming' tab for future sales.</p>
+          </div>
         ) : (
+          // If UPCOMING tab is active AND empty
           <div className="col-span-1 md:col-span-2 card text-center py-8">
-            <p className="text-gray-500">No {activeTab} sales found at the moment.</p>
+            <p className="text-gray-500">No upcoming sales found at the moment.</p>
+            <p className="text-sm text-gray-400 mt-2">Check back later or browse ongoing deals.</p>
           </div>
         )}
       </div>
+      {/* End Updated Sales Grid */}
     </div>
   );
 }

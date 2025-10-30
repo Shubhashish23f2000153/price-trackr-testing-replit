@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import ProductSource
-from ..utils.scraper_queue import enqueue_scrape, enqueue_alert_check # <-- Import new function
+from ..utils.scraper_queue import enqueue_scrape, enqueue_alert_check, enqueue_sales_discovery # <-- IMPORT NEW FUNCTION
 
 router = APIRouter()
 
@@ -16,6 +16,16 @@ def run_all_scrapes(db: Session):
             print(f"Enqueued scrape for: {ps.url}")
         except Exception as e:
             print(f"Failed to enqueue scrape job for {ps.url}: {e}")
+
+# --- ADD THIS NEW FUNCTION ---
+def run_sales_discovery():
+    """Function to be run in the background to find sales."""
+    try:
+        print("Enqueuing sales discovery job.")
+        enqueue_sales_discovery()
+    except Exception as e:
+        print(f"Failed to enqueue sales discovery job: {e}")
+
 
 # --- ADD THIS NEW FUNCTION ---
 def run_alert_checks():
@@ -39,5 +49,8 @@ async def trigger_scrapes(background_tasks: BackgroundTasks, db: Session = Depen
     
     # 2. Add alert check task
     background_tasks.add_task(run_alert_checks)
+
+    # 3. ADD SALES DISCOVERY TASK
+    background_tasks.add_task(run_sales_discovery) # <-- ADD THIS LINE
     
     return {"message": "Scraping and alert check jobs triggered."}

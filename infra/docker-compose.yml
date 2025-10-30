@@ -40,13 +40,13 @@ services:
       context: ../backend
       dockerfile: Dockerfile
     container_name: pricetrackr-backend
-    volumes: # <-- ADD THIS LINE
-      - ../backend:/app # <-- AND THIS LINE
+    volumes:
+      - ../backend:/app # <-- Live code mounting
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-pricetrackr}:${POSTGRES_PASSWORD:-testpassword}@postgres:5432/${POSTGRES_DB:-pricetrackr}
-# ... (rest of the service)
       REDIS_URL: redis://redis:6379/0
       CORS_ORIGINS: http://localhost:5000,http://localhost:3000
+      # Add other backend environment variables if needed (e.g., JWT_SECRET)
     ports:
       - "8000:8000"
     depends_on:
@@ -63,11 +63,12 @@ services:
       context: ../worker
       dockerfile: Dockerfile
     container_name: pricetrackr-worker
-    volumes: # <-- ADD THIS LINE
-      - ../worker:/app # <-- AND THIS LINE
+    volumes:                 # <-- Correct indentation
+      - ../worker:/app       # <-- Correct indentation, Live code mounting
     environment:
       REDIS_URL: redis://redis:6379/0
-# ... (rest of the service)
+      DATABASE_URL: postgresql://${POSTGRES_USER:-pricetrackr}:${POSTGRES_PASSWORD:-testpassword}@postgres:5432/${POSTGRES_DB:-pricetrackr} # Added DB URL for worker
+      PYTHONPATH: /app         # <-- Added PYTHONPATH
     depends_on:
       redis:
         condition: service_healthy
@@ -97,4 +98,3 @@ volumes:
 networks:
   pricetrackr-network:
     driver: bridge
-
