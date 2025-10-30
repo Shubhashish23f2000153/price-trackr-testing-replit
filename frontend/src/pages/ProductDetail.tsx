@@ -186,41 +186,47 @@ export default function ProductDetail() {
   useEffect(() => {
     if (lastMessage && lastMessage.type === 'PRICE_UPDATE' && lastMessage.product_id === numProductId) {
       console.log("Live update received!", lastMessage);
+      // --- 1. UPDATE CURRENT PRICE STATE (Existing Logic) ---
       setProduct(prevProduct => {
         if (!prevProduct) return null;
 
         const updatedPrices = prevProduct.prices.map(priceInfo => {
+          // Find the price info for the source that just updated
           if (priceInfo.source_name.toLowerCase() === lastMessage.source_name.toLowerCase()) {
             return {
                 ...priceInfo,
                 current_price: lastMessage.new_price,
-                // Update seller info if present in WS message
+                // Update all fields from the WebSocket message
                 seller_name: lastMessage.seller_name !== undefined ? lastMessage.seller_name : priceInfo.seller_name,
                 seller_rating: lastMessage.seller_rating !== undefined ? lastMessage.seller_rating : priceInfo.seller_rating,
                 seller_review_count: lastMessage.seller_review_count !== undefined ? lastMessage.seller_review_count : priceInfo.seller_review_count,
+                avg_review_sentiment: lastMessage.avg_review_sentiment !== undefined ? lastMessage.avg_review_sentiment : priceInfo.avg_review_sentiment,
             };
           }
           return priceInfo;
         });
 
+        // Check if the source is new (e.g., product was tracked, but this is the first scrape from this source)
         const sourceExists = prevProduct.prices.some(
           p => p.source_name.toLowerCase() === lastMessage.source_name.toLowerCase()
         );
 
-        if (!sourceExists) {
+        if (!sourceExists && lastMessage.source_name) {
             updatedPrices.push({
                 source_name: lastMessage.source_name,
                 current_price: lastMessage.new_price,
                 currency: "INR", // Defaults, adjust if needed
-                availability: "In Stock",
+                availability: "In Stock", // Default from WS
                 in_stock: true,
-                url: "", // Not available in WS
+                url: "", // URL not in WS message, but not critical for this update
                 seller_name: lastMessage.seller_name,
                 seller_rating: lastMessage.seller_rating,
                 seller_review_count: lastMessage.seller_review_count,
+                avg_review_sentiment: lastMessage.avg_review_sentiment,
             });
         }
 
+        // Update the "Lowest Ever" price
         const newLowest = Math.min(
           prevProduct.lowest_ever_price || Infinity,
           lastMessage.new_price
@@ -228,6 +234,16 @@ export default function ProductDetail() {
 
         return { ...prevProduct, prices: updatedPrices, lowest_ever_price: newLowest };
       });
+
+      // --- 2. UPDATE PRICE HISTORY STATE (This is the new part) ---
+      const newHistoryItem: PriceHistoryItem = {
+        date: new Date().toLocaleDateString(), // Format to match initial fetch (e.g., "10/30/2025")
+        price: lastMessage.new_price,
+        source: lastMessage.source_name || 'Unknown' // Use source_name from message
+      };
+
+      // Append the new item to the history array, which will re-render the chart
+      setHistory(prevHistory => [...prevHistory, newHistoryItem]);
     }
   }, [lastMessage, numProductId]);
 

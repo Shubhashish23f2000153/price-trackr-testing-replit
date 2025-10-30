@@ -153,6 +153,10 @@ def scrape_and_save_product(url: str, product_id: int, source_id: int):
                     "source_id": source_id,
                     "source_name": scraper.__class__.__name__.replace("Scraper", ""),
                     # We could add sentiment here if needed for live updates
+                    "seller_name": new_price_log.seller_name,
+                    "seller_rating": new_price_log.seller_rating,
+                    "seller_review_count": new_price_log.seller_review_count,
+                    "avg_review_sentiment": new_price_log.avg_review_sentiment
                 })
                 redis_conn.publish("price_updates", update_message)
                 print(f"[Worker] 📢 Published update to 'price_updates' channel.")
