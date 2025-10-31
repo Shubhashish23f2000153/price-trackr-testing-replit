@@ -4,18 +4,16 @@ import json
 from redis import Redis
 from rq import Worker, Queue
 from dotenv import load_dotenv
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Boolean, ForeignKey, Float, JSON # Import Float
+# --- 1. Import JSON from sqlalchemy ---
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Boolean, ForeignKey, Float, JSON
 from sqlalchemy.orm import sessionmaker, relationship, declarative_base
 from sqlalchemy.sql import func
 from contextlib import contextmanager
 import whois
 from datetime import datetime, timezone, timedelta
-from typing import List # Import List
-from playwright_scraper.sales_discovery import discover_all_sales # <-- IMPORT YOUR NEW SCRIPT
-
+from typing import List 
+from playwright_scraper.sales_discovery import discover_all_sales 
 from pywebpush import webpush, WebPushException
-
-# --- ADD VADER IMPORT ---
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from playwright_scraper.scrapers import get_scraper
 # --- END VADER IMPORT ---
@@ -40,6 +38,10 @@ class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(100), unique=True, index=True, nullable=False)
+    hashed_password = Column(String(200), nullable=False)
+    full_name = Column(String(200), nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
     push_subscription = Column(JSON, nullable=True) # <-- Add this
 
 # --- 2. Define Minimal Database Models ---
@@ -64,9 +66,7 @@ class PriceLog(Base):
     seller_name = Column(String(200), nullable=True)
     seller_rating = Column(String(100), nullable=True)
     seller_review_count = Column(String(100), nullable=True)
-    # --- ADD Sentiment Column ---
-    avg_review_sentiment = Column(Float, nullable=True) # Stores avg compound score (-1 to 1)
-    # --- End Sentiment Column ---
+    avg_review_sentiment = Column(Float, nullable=True)
 
 
 class ScamScore(Base):
@@ -75,7 +75,7 @@ class ScamScore(Base):
     domain = Column(String(200), unique=True, nullable=False, index=True)
     whois_days_old = Column(Integer, nullable=True)
     safe_browsing_flag = Column(Boolean, default=False)
-    trust_signals = Column(Float, default=0.0) # Simplified for worker
+    trust_signals = Column(Float, default=0.0) 
     score = Column(Float, default=0.0)
     last_checked = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -97,13 +97,13 @@ def scrape_and_save_product(url: str, product_id: int, source_id: int):
     print(f"[Worker] Scraping: {url} (ProductID: {product_id})")
     try:
         scraper = get_scraper(url)
-        data = scraper.scrape() # data is a dict
+        data = scraper.scrape() 
         
         if not data or not data.get("price") or data.get("price") == 0:
             print(f"[Worker] Scrape failed for {url}: No data or price.")
             return None
 
-        # --- Sentiment Analysis ---
+        # ... (Sentiment Analysis logic remains the same) ...
         avg_sentiment_score = None
         reviews = data.get("recent_reviews", [])
         if reviews and isinstance(reviews, list) and len(reviews) > 0:
@@ -143,6 +143,18 @@ def scrape_and_save_product(url: str, product_id: int, source_id: int):
             
             # Step 2: Update the main Product entry (if needed)
             product = db.query(Product).filter(Product.id == product_id).first()
+            product_source = db.query(ProductSource).filter(ProductSource.id == source_id).first()
+
+            if not product or not product_source:
+                print(f"[Worker] Product {product_id} or Source {source_id} was deleted. Skipping price log save.")
+                return None
+            
+            new_price_log = PriceLog(
+                product_source_id=source_id,
+                # ... (rest of PriceLog fields) ...
+            )
+            db.add(new_price_log)
+            
             if product:
                 # Only update if scraper provided new info
                 product.title = data.get("title") or product.title

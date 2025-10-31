@@ -31,9 +31,10 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-# Run the docker-compose file located in the /infra directory
-# The '-d' is removed so logs stream to the console
-args = "docker compose -f infra/docker-compose.yml up --build"
+# --- THIS IS THE UPDATED COMMAND ---
+# It now explicitly includes the .env file from the root
+args = "docker compose --env-file ./.env -f infra/docker-compose.yml up --build"
+# --- END UPDATE ---
 # Wait for the frontend port to be ready before opening the webview
 waitForPort = 5000
 

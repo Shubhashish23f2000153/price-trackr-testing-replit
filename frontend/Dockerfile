@@ -2,6 +2,10 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# --- MAKE SURE THESE LINES ARE HERE ---
+ARG VITE_VAPID_PUBLIC_KEY
+ENV VITE_VAPID_PUBLIC_KEY=${VITE_VAPID_PUBLIC_KEY}
+
 # Copy package files
 COPY package*.json ./
 
@@ -10,7 +14,6 @@ RUN npm install
 
 # Copy source code
 COPY . .
-
 # Build the application
 RUN npm run build
 

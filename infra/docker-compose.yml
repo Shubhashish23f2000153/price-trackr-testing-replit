@@ -46,7 +46,10 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-pricetrackr}:${POSTGRES_PASSWORD:-testpassword}@postgres:5432/${POSTGRES_DB:-pricetrackr}
       REDIS_URL: redis://redis:6379/0
       CORS_ORIGINS: http://localhost:5000,http://localhost:3000
-      # Add other backend environment variables if needed (e.g., JWT_SECRET)
+      # --- MAKE SURE THESE LINES ARE HERE ---
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
+      VAPID_CLAIMS_EMAIL: ${VAPID_CLAIMS_EMAIL}
     ports:
       - "8000:8000"
     depends_on:
@@ -63,12 +66,16 @@ services:
       context: ../worker
       dockerfile: Dockerfile
     container_name: pricetrackr-worker
-    volumes:                 # <-- Correct indentation
-      - ../worker:/app       # <-- Correct indentation, Live code mounting
+    volumes:                 
+      - ../worker:/app       
     environment:
       REDIS_URL: redis://redis:6379/0
-      DATABASE_URL: postgresql://${POSTGRES_USER:-pricetrackr}:${POSTGRES_PASSWORD:-testpassword}@postgres:5432/${POSTGRES_DB:-pricetrackr} # Added DB URL for worker
-      PYTHONPATH: /app         # <-- Added PYTHONPATH
+      DATABASE_URL: postgresql://${POSTGRES_USER:-pricetrackr}:${POSTGRES_PASSWORD:-testpassword}@postgres:5432/${POSTGRES_DB:-pricetrackr} 
+      PYTHONPATH: /app         
+      # --- MAKE SURE THESE LINES ARE HERE ---
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
+      VAPID_CLAIMS_EMAIL: ${VAPID_CLAIMS_EMAIL}
     depends_on:
       redis:
         condition: service_healthy
@@ -82,6 +89,9 @@ services:
     build:
       context: ../frontend
       dockerfile: Dockerfile
+      # --- MAKE SURE THIS 'args' BLOCK IS HERE ---
+      args:
+        VITE_VAPID_PUBLIC_KEY: ${VITE_VAPID_PUBLIC_KEY}
     container_name: pricetrackr-frontend
     ports:
       - "5000:80"
