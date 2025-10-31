@@ -1,10 +1,8 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:15-alpine
     container_name: pricetrackr-db
-    environment: # <-- Indented under postgres
+    environment: 
       POSTGRES_USER: ${POSTGRES_USER:-pricetrackr}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-testpassword}
       POSTGRES_DB: ${POSTGRES_DB:-pricetrackr}
@@ -40,13 +38,15 @@ services:
       context: ../backend
       dockerfile: Dockerfile
     container_name: pricetrackr-backend
+    # --- FIX: env_file goes HERE (inside the service) ---
+    env_file: ../.env
     volumes:
-      - ../backend:/app # <-- Live code mounting
+      - ../backend:/app 
     environment:
+      # These will now be properly read from the .env file
       DATABASE_URL: postgresql://${POSTGRES_USER:-pricetrackr}:${POSTGRES_PASSWORD:-testpassword}@postgres:5432/${POSTGRES_DB:-pricetrackr}
       REDIS_URL: redis://redis:6379/0
       CORS_ORIGINS: http://localhost:5000,http://localhost:3000
-      # --- MAKE SURE THESE LINES ARE HERE ---
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
       VAPID_CLAIMS_EMAIL: ${VAPID_CLAIMS_EMAIL}
@@ -66,16 +66,18 @@ services:
       context: ../worker
       dockerfile: Dockerfile
     container_name: pricetrackr-worker
+    # --- FIX: env_file goes HERE (inside the service) ---
+    env_file: ../.env
     volumes:                 
       - ../worker:/app       
     environment:
+      # These will now be properly read from the .env file
       REDIS_URL: redis://redis:6379/0
       DATABASE_URL: postgresql://${POSTGRES_USER:-pricetrackr}:${POSTGRES_PASSWORD:-testpassword}@postgres:5432/${POSTGRES_DB:-pricetrackr} 
-      PYTHONPATH: /app         
-      # --- MAKE SURE THESE LINES ARE HERE ---
+      PYTHONPATH: /app
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
-      VAPID_CLAIMS_EMAIL: ${VAPID_CLAIMS_EMAIL}
+      VAPID_CLAIMS_EMAIL: ${VAPID_CLAIMS_EMAIL}         
     depends_on:
       redis:
         condition: service_healthy
@@ -89,7 +91,7 @@ services:
     build:
       context: ../frontend
       dockerfile: Dockerfile
-      # --- MAKE SURE THIS 'args' BLOCK IS HERE ---
+      # This 'args' section is still correct and NECESSARY
       args:
         VITE_VAPID_PUBLIC_KEY: ${VITE_VAPID_PUBLIC_KEY}
     container_name: pricetrackr-frontend
