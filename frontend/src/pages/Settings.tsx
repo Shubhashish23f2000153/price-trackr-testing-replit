@@ -7,11 +7,12 @@ import {
   exportAllData, 
   ProductWithHistory,
   updatePushSubscription,
-  VAPID_PUBLIC_KEY // This is imported
+  VAPID_PUBLIC_KEY
 } from '../services/api';
 import { useNavigate } from 'react-router-dom';
 import { countries } from '../utils/regionalData';
 import { useAuth } from '../context/AuthContext';
+
 
 // --- SettingsProps Interface ---
 interface SettingsProps {
@@ -19,14 +20,16 @@ interface SettingsProps {
   setDarkMode: (value: boolean) => void;
 }
 
+
 // --- ToggleSwitchProps Interface (with disabled prop) ---
 interface ToggleSwitchProps {
   label: string;
   description: string;
   enabled: boolean;
   setEnabled: (value: boolean) => void;
-  disabled?: boolean; 
+  disabled?: boolean;
 }
+
 
 // --- ToggleSwitch Component (with disabled logic) ---
 function ToggleSwitch({ label, description, enabled, setEnabled, disabled = false }: ToggleSwitchProps) {
@@ -38,10 +41,10 @@ function ToggleSwitch({ label, description, enabled, setEnabled, disabled = fals
       </div>
       <button
         onClick={() => setEnabled(!enabled)}
-        disabled={disabled} 
+        disabled={disabled}
         className={`flex items-center p-1 rounded-full w-12 transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black dark:focus:ring-offset-gray-900 dark:focus:ring-white ${
           enabled ? 'bg-black dark:bg-white justify-end' : 'bg-gray-200 dark:bg-gray-700 justify-start'
-        } ${disabled ? 'cursor-not-allowed' : ''}`} 
+        } ${disabled ? 'cursor-not-allowed' : ''}`}
         aria-label={`Toggle ${label}`}
       >
         <span className={`block w-5 h-5 rounded-full shadow-lg transform ring-0 transition duration-200 ease-in-out ${
@@ -52,18 +55,38 @@ function ToggleSwitch({ label, description, enabled, setEnabled, disabled = fals
   );
 }
 
-// --- urlBase64ToUint8Array helper ---
-function urlBase64ToUint8Array(base64String: string) {
-  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const rawData = window.atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-  for (let i = 0; i < rawData.length; ++i) {
-    outputArray[i] = rawData.charCodeAt(i);
+
+// --- ROBUST BASE64 DECODING HELPER ---
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  if (!base64String || typeof base64String !== 'string') {
+    throw new Error('Invalid base64String provided');
   }
-  return outputArray;
+
+  const trimmed = base64String.trim();
+  if (trimmed.length === 0) {
+    throw new Error('Base64 string is empty');
+  }
+
+  const padding = '='.repeat((4 - (trimmed.length % 4)) % 4);
+  const base64 = (trimmed + padding)
+    .replace(/-/g, '+')
+    .replace(/_/g, '/');
+
+  try {
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  } catch (error) {
+    console.error('Error decoding Base64:', error);
+    throw new Error(`Failed to decode Base64 string: ${(error as Error).message}`);
+  }
 }
 // --- END HELPER ---
+
 
 
 // --- Settings Component ---
@@ -71,16 +94,17 @@ export default function Settings({ darkMode, setDarkMode }: SettingsProps) {
   const [spaceInfo, setSpaceInfo] = useState({ tracked_items: 0, price_points: 0 });
   const navigate = useNavigate();
   const [country, setCountry] = useState(() => localStorage.getItem('userCountry') || 'IN');
-  const [pushNotificationsEnabled, setPushNotificationsEnabled] = useState(() => localStorage.getItem('pushNotificationsEnabled') === 'true' ? true : false); 
+  const [pushNotificationsEnabled, setPushNotificationsEnabled] = useState(() => localStorage.getItem('pushNotificationsEnabled') === 'true' ? true : false);
   const [priceDropAlertsEnabled, setPriceDropAlertsEnabled] = useState(() => localStorage.getItem('priceDropAlertsEnabled') === 'false' ? false : true);
   const [isExporting, setIsExporting] = useState(false);
   const { user, logout } = useAuth();
-  const [isSubscribing, setIsSubscribing] = useState(false); 
+  const [isSubscribing, setIsSubscribing] = useState(false);
 
-  // (useEffect hooks remain the same)
+
   useEffect(() => { localStorage.setItem('userCountry', country); }, [country]);
   useEffect(() => { localStorage.setItem('pushNotificationsEnabled', String(pushNotificationsEnabled)); }, [pushNotificationsEnabled]);
   useEffect(() => { localStorage.setItem('priceDropAlertsEnabled', String(priceDropAlertsEnabled)); }, [priceDropAlertsEnabled]);
+
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -94,6 +118,7 @@ export default function Settings({ darkMode, setDarkMode }: SettingsProps) {
     fetchStats();
   }, []);
 
+
   // --- Subscription Logic ---
   const handlePushToggle = async (enabled: boolean) => {
     if (!user) {
@@ -103,20 +128,25 @@ export default function Settings({ darkMode, setDarkMode }: SettingsProps) {
       return;
     }
 
+
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
       alert("Push notifications are not supported by your browser.");
       return;
     }
     
-    // --- 1. ADDED CHECK FOR VAPID KEY ---
-    if (!VAPID_PUBLIC_KEY) {
-      console.error("VITE_VAPID_PUBLIC_KEY is not set in your .env file.");
+    setIsSubscribing(true);
+
+    // --- SAFETY CHECK (This fixes Error 1 by removing the '.length' check) ---
+    if (!VAPID_PUBLIC_KEY || VAPID_PUBLIC_KEY === 'VITE_VAPID_PUBLIC_KEY_PLACEHOLDER') {
+      console.error("VAPID key is missing or is still the placeholder. Build failed.");
       alert("Error: Push notification setup is incomplete on the server. Please contact support.");
+      setIsSubscribing(false); 
+      setPushNotificationsEnabled(false); 
+      localStorage.setItem('pushNotificationsEnabled', 'false');
       return;
     }
-    // --- END CHECK ---
+    // --- END SAFETY CHECK ---
 
-    setIsSubscribing(true); 
 
     try {
       if (enabled) {
@@ -126,12 +156,19 @@ export default function Settings({ darkMode, setDarkMode }: SettingsProps) {
           throw new Error('Permission not granted for notifications');
         }
 
+        let applicationServerKey: Uint8Array;
+        try {
+          applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+        } catch (keyError) {
+          console.error('Failed to process VAPID key:', keyError);
+          throw new Error(`Invalid VAPID key format: ${(keyError as Error).message}`);
+        }
+
         const registration = await navigator.serviceWorker.ready;
         const subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
-          // --- 2. FIXED TYPO HERE ---
-          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
-          // --- END FIX ---
+          // --- THIS IS THE FIX for Error 2 ---
+         applicationServerKey: applicationServerKey as BufferSource,
         });
         
         console.log("Push subscription successful:", subscription);
@@ -139,6 +176,7 @@ export default function Settings({ darkMode, setDarkMode }: SettingsProps) {
         alert("Push notifications enabled!");
         setPushNotificationsEnabled(true);
         localStorage.setItem('pushNotificationsEnabled', 'true');
+
 
       } else {
         // --- UNSUBSCRIBE ---
@@ -155,15 +193,19 @@ export default function Settings({ darkMode, setDarkMode }: SettingsProps) {
         localStorage.setItem('pushNotificationsEnabled', 'false');
       }
 
+
     } catch (error) {
       console.error('Failed to update push subscription:', error);
-      // This is where your error alert was coming from
-      alert(`Error: ${(error as Error).message}. Notifications may not be enabled.`); 
+      const errorMessage = (error as Error).message || String(error);
+      alert(`Error: ${errorMessage}. Notifications may not be enabled.`);
+      setPushNotificationsEnabled(false);
+      localStorage.setItem('pushNotificationsEnabled', 'false');
     } finally {
       setIsSubscribing(false);
     }
   };
   // --- END Subscription Logic ---
+
 
   const handleClearAll = async () => {
      if (window.confirm("DANGER ZONE:\nAre you absolutely sure you want to delete ALL tracked products?\nThis action cannot be undone.")) {
@@ -180,6 +222,7 @@ export default function Settings({ darkMode, setDarkMode }: SettingsProps) {
     }
    };
 
+
    const handleDeleteAccount = async () => {
     if (!user) {
       alert("You must be logged in to delete your account.");
@@ -191,7 +234,7 @@ export default function Settings({ darkMode, setDarkMode }: SettingsProps) {
         alert(result.message);
         logout();
         navigate('/login');
-      } catch (error: any) { 
+      } catch (error: any) {
         console.error("Failed to delete account:", error);
         const errorMessage = error.response?.data?.detail || "Failed to delete account. Please try again.";
         alert(errorMessage);
@@ -199,17 +242,20 @@ export default function Settings({ darkMode, setDarkMode }: SettingsProps) {
     }
   };
 
+
   const handleExportData = async () => {
     setIsExporting(true);
     alert("Starting data export. This may take a moment...");
     try {
       const productsWithHistory: ProductWithHistory[] = await exportAllData();
 
+
       if (!productsWithHistory || productsWithHistory.length === 0) {
         alert("No products found to export.");
         setIsExporting(false);
         return;
       }
+
 
       const jsonData = JSON.stringify(productsWithHistory, null, 2);
       const blob = new Blob([jsonData], { type: 'application/json' });
@@ -221,6 +267,7 @@ export default function Settings({ darkMode, setDarkMode }: SettingsProps) {
       document.body.removeChild(link);
       URL.revokeObjectURL(link.href);
 
+
     } catch (error) {
       console.error("Failed to export data:", error);
       alert("Failed to export data. Please try again.");
@@ -229,12 +276,14 @@ export default function Settings({ darkMode, setDarkMode }: SettingsProps) {
     }
   };
 
+
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-semibold mb-2">Settings</h2>
         <p className="text-gray-600 dark:text-gray-400">Configure your price tracking preferences and notifications</p>
       </div>
+
 
       {/* Appearance Card */}
       <div className="card">
@@ -250,6 +299,7 @@ export default function Settings({ darkMode, setDarkMode }: SettingsProps) {
           </select>
         </div>
       </div>
+
 
       {/* Region & Currency Card */}
       <div className="card">
@@ -274,6 +324,7 @@ export default function Settings({ darkMode, setDarkMode }: SettingsProps) {
       </div>
 
 
+
       {/* Notifications Card - Uses ToggleSwitch */}
       <div className="card">
         <h3 className="text-lg font-semibold mb-4 flex items-center space-x-2"><Bell className="w-5 h-5" /><span>Notifications</span></h3>
@@ -282,8 +333,8 @@ export default function Settings({ darkMode, setDarkMode }: SettingsProps) {
             label="Push Notifications"
             description="Receive browser notifications"
             enabled={pushNotificationsEnabled}
-            setEnabled={handlePushToggle} 
-            disabled={isSubscribing}       
+            setEnabled={handlePushToggle}
+            disabled={isSubscribing}
           />
           <ToggleSwitch
             label="Price Drop Alerts"
@@ -294,6 +345,7 @@ export default function Settings({ darkMode, setDarkMode }: SettingsProps) {
           />
         </div>
       </div>
+
 
        {/* Privacy & Security Card */}
        <div className="card">
@@ -314,6 +366,7 @@ export default function Settings({ darkMode, setDarkMode }: SettingsProps) {
            </div>
         </div>
       </div>
+
 
        {/* Space Information Card */}
        <div className="card">
@@ -341,6 +394,7 @@ export default function Settings({ darkMode, setDarkMode }: SettingsProps) {
           <span>{isExporting ? 'Exporting...' : 'Export Full Data'}</span>
         </button>
       </div>
+
 
       {/* Danger Zone Card */}
       <div className="card border-red-500/30 dark:border-red-500/50 mt-8">

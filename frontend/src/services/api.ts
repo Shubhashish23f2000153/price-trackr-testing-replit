@@ -2,7 +2,10 @@ import axios from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
-const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+// --- THIS IS THE CRITICAL CHANGE ---
+// We replace the failing import.meta.env with a simple placeholder.
+const VAPID_PUBLIC_KEY = 'VITE_VAPID_PUBLIC_KEY_PLACEHOLDER';
+// --- END CHANGE ---
 
 const api = axios.create({
   baseURL: API_BASE_URL,

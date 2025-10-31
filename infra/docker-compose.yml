@@ -2,7 +2,8 @@ services:
   postgres:
     image: postgres:15-alpine
     container_name: pricetrackr-db
-    environment: 
+    env_file: ./.env
+    environment:
       POSTGRES_USER: ${POSTGRES_USER:-pricetrackr}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-testpassword}
       POSTGRES_DB: ${POSTGRES_DB:-pricetrackr}
@@ -38,12 +39,10 @@ services:
       context: ../backend
       dockerfile: Dockerfile
     container_name: pricetrackr-backend
-    # --- FIX: env_file goes HERE (inside the service) ---
-    env_file: ../.env
+    env_file: ./.env
     volumes:
       - ../backend:/app 
     environment:
-      # These will now be properly read from the .env file
       DATABASE_URL: postgresql://${POSTGRES_USER:-pricetrackr}:${POSTGRES_PASSWORD:-testpassword}@postgres:5432/${POSTGRES_DB:-pricetrackr}
       REDIS_URL: redis://redis:6379/0
       CORS_ORIGINS: http://localhost:5000,http://localhost:3000
@@ -66,12 +65,10 @@ services:
       context: ../worker
       dockerfile: Dockerfile
     container_name: pricetrackr-worker
-    # --- FIX: env_file goes HERE (inside the service) ---
-    env_file: ../.env
+    env_file: ./.env
     volumes:                 
       - ../worker:/app       
     environment:
-      # These will now be properly read from the .env file
       REDIS_URL: redis://redis:6379/0
       DATABASE_URL: postgresql://${POSTGRES_USER:-pricetrackr}:${POSTGRES_PASSWORD:-testpassword}@postgres:5432/${POSTGRES_DB:-pricetrackr} 
       PYTHONPATH: /app
@@ -91,9 +88,12 @@ services:
     build:
       context: ../frontend
       dockerfile: Dockerfile
-      # This 'args' section is still correct and NECESSARY
+      # --- THIS IS THE SYNTAX CHANGE ---
+      # Use dictionary format for args
       args:
         VITE_VAPID_PUBLIC_KEY: ${VITE_VAPID_PUBLIC_KEY}
+    # This path assumes .env is in the infra/ folder
+    env_file: ./.env 
     container_name: pricetrackr-frontend
     ports:
       - "5000:80"
