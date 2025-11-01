@@ -1,3 +1,4 @@
+# worker/Dockerfile
 FROM mcr.microsoft.com/playwright/python:v1.40.0-jammy
 
 WORKDIR /app
@@ -15,5 +16,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Run the worker
-CMD ["python", "playwright_scraper/runner.py"]
+# --- THIS IS THE FIX ---
+# Run the worker as a module (-m) so relative imports work.
+# This tells Python to run the 'runner' module inside the 'playwright_scraper' package.
+CMD ["python", "-m", "playwright_scraper.runner"]

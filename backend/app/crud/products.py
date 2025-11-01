@@ -1,8 +1,10 @@
+# backend/app/crud/products.py
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from typing import List, Optional
-from ..models import Product, ProductSource, Source, PriceLog
+from ..models import Product, ProductSource, Source, PriceLog, Seller # Import Seller
 from ..schemas.product import ProductCreate, ProductUpdate
+from datetime import datetime, timezone # Import datetime
 
 
 def get_product(db: Session, product_id: int) -> Optional[Product]:
@@ -12,6 +14,44 @@ def get_product(db: Session, product_id: int) -> Optional[Product]:
 def get_products(db: Session, skip: int = 0, limit: int = 100) -> List[Product]:
     return db.query(Product).offset(skip).limit(limit).all()
 
+# --- NEW HELPER FUNCTION ---
+def get_or_create_seller(db: Session, marketplace: str, seller_name: str, seller_rating: str, review_count: str) -> Optional[Seller]:
+    """Upserts a seller in the database."""
+    if not seller_name:
+        return None
+    
+    try:
+        # Try to find an existing seller by name and marketplace
+        existing_seller = db.query(Seller).filter(
+            Seller.marketplace == marketplace,
+            Seller.seller_name == seller_name
+        ).first()
+
+        if existing_seller:
+            # Update existing seller's info if it's new
+            existing_seller.seller_rating = seller_rating or existing_seller.seller_rating
+            existing_seller.review_count = review_count or existing_seller.review_count
+            existing_seller.last_seen = datetime.now(timezone.utc)
+            db.commit()
+            db.refresh(existing_seller)
+            return existing_seller
+        else:
+            # Create a new seller
+            new_seller = Seller(
+                marketplace=marketplace,
+                seller_name=seller_name,
+                seller_rating=seller_rating,
+                review_count=review_count
+            )
+            db.add(new_seller)
+            db.commit()
+            db.refresh(new_seller)
+            return new_seller
+    except Exception as e:
+        db.rollback()
+        print(f"[API] Error in get_or_create_seller: {e}")
+        return None
+# --- END HELPER ---
 
 def create_product(db: Session, product: ProductCreate) -> Product:
     db_product = Product(
@@ -55,11 +95,18 @@ def get_product_with_prices(db: Session, product_id: int):
         return None
 
     prices = []
-    for ps in product.product_sources:
-        # Get the most recent price log for this product source
+    
+    # Query all product sources linked to this product
+    product_sources = db.query(ProductSource).filter(ProductSource.product_id == product_id).all()
+
+    for ps in product_sources:
+        # Get the most recent price log for this specific product source
         latest_price = db.query(PriceLog).filter(
             PriceLog.product_source_id == ps.id
         ).order_by(desc(PriceLog.scraped_at)).first()
+        
+        # Get the seller info
+        seller_info = db.query(Seller).filter(Seller.id == ps.seller_id).first()
 
         if latest_price:
             prices.append({
@@ -69,15 +116,16 @@ def get_product_with_prices(db: Session, product_id: int):
                 "availability": latest_price.availability,
                 "in_stock": latest_price.in_stock,
                 "url": ps.url,
-                "seller_name": latest_price.seller_name,
-                "seller_rating": latest_price.seller_rating,
-                "seller_review_count": latest_price.seller_review_count,
-                # --- ADD Sentiment ---
+                # --- FIX: Pull from seller_info object ---
+                "seller_name": seller_info.seller_name if seller_info else None,
+                "seller_rating": seller_info.seller_rating if seller_info else None,
+                "seller_review_count": seller_info.review_count if seller_info else None,
                 "avg_review_sentiment": latest_price.avg_review_sentiment
-                # --- End Sentiment ---
+                # --- END FIX ---
             })
 
     return {"product": product, "prices": prices}
+
 
 def delete_all_products(db: Session) -> int:
     """Deletes all products from the database and returns the count."""

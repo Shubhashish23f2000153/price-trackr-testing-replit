@@ -5,7 +5,6 @@ import json
 from redis import Redis
 from rq import Worker, Queue
 from dotenv import load_dotenv
-# --- FIX: Import Date from sqlalchemy ---
 from sqlalchemy import create_engine, desc, func
 from sqlalchemy.orm import sessionmaker, Session
 from contextlib import contextmanager
@@ -216,10 +215,9 @@ def scrape_and_save_product(url: str, product_id: int, source_id: int):
         return None
 
 
-# --- 5. Scam Check Task (remains the same) ---
+# --- 5. Scam Check Task (FIXED) ---
 def compute_scam_score(domain: str):
     """Worker task to compute domain scam score using WHOIS."""
-    # ... (This function is unchanged) ...
     print(f"[Worker] Computing scam score for: {domain}")
     with get_db_session() as db:
         existing_score = db.query(ScamScore).filter(ScamScore.domain == domain).first()
@@ -234,7 +232,9 @@ def compute_scam_score(domain: str):
 
         score = 50.0 
         days_old = None
-        signals = {}
+        
+        # --- FIX: This variable will hold the numeric signal ---
+        trust_signal_value = None 
 
         try:
             w = whois.whois(domain)
@@ -247,18 +247,19 @@ def compute_scam_score(domain: str):
                 if creation_date.tzinfo is None:
                     creation_date = creation_date.replace(tzinfo=timezone.utc)
                 days_old = (now_utc - creation_date).days
-                signals['whois_age_days'] = days_old
+                trust_signal_value = days_old # Store the number
+                
                 if days_old < 90: score = 20.0
                 elif days_old < 365: score = 45.0
                 else: score = 80.0
             else:
-                 signals['whois_age_days'] = 'Not Found'
                  score = 40.0
+                 trust_signal_value = -1.0 # Use -1 to indicate "Not Found"
             
             if existing_score:
                  existing_score.whois_days_old = days_old
                  existing_score.score = score
-                 existing_score.trust_signals = signals.get('whois_age_days', 0.0)
+                 existing_score.trust_signals = trust_signal_value # Save the number
                  existing_score.last_checked = datetime.now(timezone.utc)
                  print(f"[Worker] ✅ Success. Updated score for {domain}: {score}")
             else:
@@ -266,7 +267,7 @@ def compute_scam_score(domain: str):
                      domain=domain,
                      whois_days_old=days_old,
                      safe_browsing_flag=False,
-                     trust_signals=signals.get('whois_age_days', 0.0),
+                     trust_signals=trust_signal_value, # Save the number
                      score=score
                  )
                  db.add(new_score)
@@ -275,56 +276,58 @@ def compute_scam_score(domain: str):
         except Exception as e:
             import traceback
             print(f"[Worker] ❌ CRITICAL ERROR checking WHOIS for {domain}: {e}\n{traceback.format_exc()}")
+            # Rollback any failed transaction
+            db.rollback()
             if not existing_score:
-                default_score = ScamScore(domain=domain, score=50.0, trust_signals=0.0)
-                db.add(default_score)
-                db.commit()
+                try:
+                    # Try to add a default score so we don't re-check on every run
+                    default_score = ScamScore(domain=domain, score=50.0, trust_signals=-1.0) # Use -1
+                    db.add(default_score)
+                    db.commit()
+                except Exception as e2:
+                    print(f"[Worker] ❌ Failed to save default score: {e2}")
+                    db.rollback()
             elif existing_score:
-                 existing_score.last_checked = datetime.now(timezone.utc)
-                 db.commit()
+                 try:
+                    existing_score.last_checked = datetime.now(timezone.utc)
+                    db.commit()
+                 except Exception as e3:
+                    print(f"[Worker] ❌ Failed to update last_checked: {e3}")
+                    db.rollback()
             return
+# --- END FIX ---
         
 # --- 6. Price Alert Check Task (remains the same) ---
 def check_price_alerts():
     """
     Worker task to check all active price alerts against the latest prices.
     """
-    # ... (This function is unchanged) ...
     print("[Worker] Checking all active price alerts...")
-    
     triggered_alerts = 0
     with get_db_session() as db:
         items_to_check = db.query(Watchlist).filter(
             Watchlist.alert_rules != None
         ).all()
-        
         print(f"[Worker] Found {len(items_to_check)} watchlist items with alert rules.")
-        
         for item in items_to_check:
             try:
                 alert_price = item.alert_rules.get("threshold")
                 user_email = item.user_id 
-                
                 if not alert_price or not user_email:
                     continue
-                
                 product_sources = db.query(ProductSource).filter(ProductSource.product_id == item.product_id).all()
                 if not product_sources: continue
-                
                 lowest_current_price = None
                 for ps in product_sources:
                     latest_price_log = db.query(PriceLog).filter(
                         PriceLog.product_source_id == ps.id
                     ).order_by(desc(PriceLog.scraped_at)).first()
-                    
                     if latest_price_log:
                         current_price = latest_price_log.price_cents / 100
                         if lowest_current_price is None or current_price < lowest_current_price:
                             lowest_current_price = current_price
-                
                 if lowest_current_price and lowest_current_price <= alert_price:
                     print(f"[Worker]  TRIGGER! Product {item.product_id} is {lowest_current_price}, below alert of {alert_price} for user {item.user_id}")
-                    
                     alert_message = json.dumps({
                         "type": "PRICE_ALERT",
                         "product_id": item.product_id,
@@ -334,20 +337,17 @@ def check_price_alerts():
                     })
                     redis_conn.publish("price_updates", alert_message)
                     triggered_alerts += 1
-
                     user = db.query(User).filter(User.email == user_email).first()
                     if user and user.push_subscription:
                         print(f"[Worker]  Found push subscription for {user_email}. Sending push...")
                         try:
                             vapid_private_key = os.getenv("VAPID_PRIVATE_KEY")
                             vapid_claims = {"sub": f"mailto:{os.getenv('VAPID_CLAIMS_EMAIL')}"}
-                            
                             payload = json.dumps({
                                 "title": "Price Alert!",
                                 "body": f"Price for Product ID {item.product_id} dropped to ₹{lowest_current_price}!",
                                 "url": f"/product/{item.product_id}"
                             })
-
                             webpush(
                                 subscription_info=user.push_subscription,
                                 data=payload,
@@ -355,7 +355,6 @@ def check_price_alerts():
                                 vapid_claims=vapid_claims
                             )
                             print(f"[Worker]  ✅ Push notification sent.")
-
                         except WebPushException as ex:
                             print(f"[Worker]  ❌ Error sending push: {ex}")
                             if ex.response and ex.response.status_code in [404, 410]:
@@ -366,7 +365,6 @@ def check_price_alerts():
                             print(f"[Worker]  ❌ Unexpected error during webpush: {e}")
             except Exception as e:
                 print(f"[Worker] Error checking alert for item {item.id}: {e}")
-                
     print(f"[Worker] Finished alert check. Triggered {triggered_alerts} alerts.")
     return triggered_alerts
 
@@ -386,7 +384,6 @@ def run_aggregation_job():
     """Worker task to run daily and monthly aggregations."""
     print("[Worker] Running price aggregation job...")
     try:
-        # --- FIX: Use relative import ---
         from .aggregation import run_aggregation_jobs
         run_aggregation_jobs()
         print("[Worker] ✅ Price aggregation job complete.")
