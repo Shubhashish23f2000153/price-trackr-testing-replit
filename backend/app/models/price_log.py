@@ -1,4 +1,6 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Boolean, Float # Import Float
+# backend/app/models/price_log.py
+# (Removed seller columns, avg_review_sentiment remains)
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Boolean, Float, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from ..database import Base
@@ -15,14 +17,17 @@ class PriceLog(Base):
     in_stock = Column(Boolean, default=True)
     scraped_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
-    seller_name = Column(String(200), nullable=True)
-    seller_rating = Column(String(100), nullable=True)
-    seller_review_count = Column(String(100), nullable=True)
+    # --- REMOVED SELLER COLUMNS ---
+    # seller_name = Column(String(200), nullable=True)
+    # seller_rating = Column(String(100), nullable=True)
+    # seller_review_count = Column(String(100), nullable=True)
 
-    # --- ADDED Sentiment Column ---
-    avg_review_sentiment = Column(Float, nullable=True) # Stores avg compound score (-1 to 1)
-    # --- End Sentiment Column ---
-
+    avg_review_sentiment = Column(Float, nullable=True) # Kept this, as it's about the product reviews, not seller
 
     # Relationships
     product_source = relationship("ProductSource", back_populates="price_logs")
+    
+    # --- ADDED UNIQUE CONSTRAINT ---
+    __table_args__ = (
+        UniqueConstraint('product_source_id', 'scraped_at', name='_product_source_scraped_at_uc'),
+    )

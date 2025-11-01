@@ -1,23 +1,27 @@
+# backend/app/api/cron.py
 from fastapi import APIRouter, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import ProductSource
-from ..utils.scraper_queue import enqueue_scrape, enqueue_alert_check, enqueue_sales_discovery # <-- IMPORT NEW FUNCTION
+from ..utils.scraper_queue import (
+    enqueue_scrape, 
+    enqueue_alert_check, 
+    enqueue_sales_discovery, 
+    enqueue_aggregation # <-- IMPORT THE CORRECT FUNCTION
+)
 
 router = APIRouter()
 
 def run_all_scrapes(db: Session):
-    # ... (this function remains the same)
+    """Function to be run in the background to enqueue scrapes."""
     all_product_sources = db.query(ProductSource).all()
     print(f"Found {len(all_product_sources)} products to re-scrape.")
     for ps in all_product_sources:
         try:
             enqueue_scrape(ps.url, ps.product_id, ps.source_id)
-            print(f"Enqueued scrape for: {ps.url}")
         except Exception as e:
             print(f"Failed to enqueue scrape job for {ps.url}: {e}")
 
-# --- ADD THIS NEW FUNCTION ---
 def run_sales_discovery():
     """Function to be run in the background to find sales."""
     try:
@@ -26,8 +30,6 @@ def run_sales_discovery():
     except Exception as e:
         print(f"Failed to enqueue sales discovery job: {e}")
 
-
-# --- ADD THIS NEW FUNCTION ---
 def run_alert_checks():
     """Function to be run in the background to check alerts."""
     try:
@@ -36,21 +38,27 @@ def run_alert_checks():
     except Exception as e:
         print(f"Failed to enqueue alert check job: {e}")
 
+# --- THIS IS THE CORRECTED FUNCTION ---
+def run_data_aggregation():
+    """Function to be run in the background to aggregate data."""
+    try:
+        print("Enqueuing data aggregation job.")
+        enqueue_aggregation() # <-- IT SHOULD CALL enqueue_aggregation()
+    except Exception as e:
+        print(f"Failed to enqueue data aggregation job: {e}")
+# --- END CORRECTION ---
+
 @router.post("/trigger-scrapes")
 async def trigger_scrapes(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """
     This endpoint is called by the cron job service.
-    It adds scraping AND alert checking to the background.
+    It adds scraping, alert checking, sales, AND aggregation to the background.
     """
-    print("Cron job triggered: Starting all scrapes and alert checks.")
+    print("Cron job triggered: Starting all scrapes, alerts, sales, and aggregation.")
     
-    # 1. Add scraping task
     background_tasks.add_task(run_all_scrapes, db)
-    
-    # 2. Add alert check task
     background_tasks.add_task(run_alert_checks)
-
-    # 3. ADD SALES DISCOVERY TASK
-    background_tasks.add_task(run_sales_discovery) # <-- ADD THIS LINE
+    background_tasks.add_task(run_sales_discovery)
+    background_tasks.add_task(run_data_aggregation) # <-- This line is now correct
     
-    return {"message": "Scraping and alert check jobs triggered."}
+    return {"message": "All background jobs (scrape, alerts, sales, aggregation) triggered."}

@@ -1,3 +1,4 @@
+// frontend/src/pages/ProductDetail.tsx
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
@@ -11,7 +12,8 @@ import {
   ProductDetail as ProductDetailType,
   PriceHistoryItem,
   Watchlist,
-  ScamScore
+  ScamScore,
+  PriceInfo // <-- IMPORT PriceInfo
 } from '../services/api';
 // --- Import Icons ---
 import { ArrowLeft, Tag, BarChart2, Heart, Trash2, AlertTriangle, Star, CheckCircle, HelpCircle } from 'lucide-react';
@@ -22,36 +24,28 @@ import { useAuth } from '../context/AuthContext';
 import TrustBadge from '../components/TrustBadge';
 
 // --- Seller Trust Helper Functions & Component ---
+// (These functions are unchanged)
 interface SellerTrustInfo {
   level: 'good' | 'okay' | 'poor' | 'new' | 'unknown';
   message: string;
 }
-
-// Function to parse rating string (e.g., "4.5 Stars", "90% Positive") into a number 0-5
 const parseRating = (ratingStr: string | null | undefined): number | null => {
     if (!ratingStr) return null;
     let numericRating: number | null = null;
-
-    // Check for "X.X Stars" or just "X.X"
     let match = ratingStr.match(/([\d\.]+)/);
     if (match) {
         numericRating = parseFloat(match[1]);
     } else {
-        // Check for "XX% Positive"
         match = ratingStr.match(/(\d+)%\s*Positive/i);
         if (match) {
-            // Convert percentage to a 0-5 scale (simple linear mapping)
             numericRating = (parseFloat(match[1]) / 100) * 5;
         }
     }
-    // Clamp rating between 0 and 5
     if (numericRating !== null) {
        return Math.max(0, Math.min(5, numericRating));
     }
     return null;
 };
-
-// Function to parse review count string (e.g., "1,500", "5k") into a number
 const parseReviewCount = (countStr: string | null | undefined): number | null => {
     if (!countStr) return null;
     let numStr = countStr.toLowerCase().replace(/,/g, '');
@@ -66,8 +60,6 @@ const parseReviewCount = (countStr: string | null | undefined): number | null =>
     const num = parseFloat(numStr);
     return isNaN(num) ? null : Math.round(num * multiplier);
 };
-
-// Determines seller trust level based on rating and review count
 const getSellerTrustLevel = (
     ratingStr: string | null | undefined,
     countStr: string | null | undefined
@@ -78,38 +70,26 @@ const getSellerTrustLevel = (
     if (rating === null && (count === null || count === 0)) {
         return { level: 'unknown', message: 'Seller information not available.' };
     }
-
-    // Prioritize low rating regardless of count
     if (rating !== null && rating < 3.5) {
         return { level: 'poor', message: `Low seller rating (${rating.toFixed(1)}/5). Consider checking recent reviews.` };
     }
-
-    // High rating and high count = good
     if (rating !== null && rating >= 4.2 && count !== null && count >= 500) {
         return { level: 'good', message: `Good rating (${rating.toFixed(1)}/5) with many reviews (${count.toLocaleString()}).` };
     }
-
-    // Good rating but low count = new/unproven
     if (rating !== null && rating >= 4.0 && (count === null || count < 100)) {
         return { level: 'new', message: `Rating is okay (${rating.toFixed(1)}/5), but seller has few reviews. Verify seller reputation.` };
     }
-     // Only count available, and it's low
     if (rating === null && count !== null && count < 100) {
         return { level: 'new', message: `Seller has few reviews (${count.toLocaleString()}). Verify seller reputation.` };
     }
-
-    // Default to 'okay' for moderate ratings or high counts with moderate ratings
     if (rating !== null || count !== null) {
         let message = "Seller rating seems acceptable.";
         if (rating !== null) message += ` (${rating.toFixed(1)}/5)`;
         if (count !== null) message += ` (${count.toLocaleString()} reviews)`;
         return { level: 'okay', message: message };
     }
-
-    return { level: 'unknown', message: 'Could not determine seller trust.' }; // Fallback
+    return { level: 'unknown', message: 'Could not determine seller trust.' };
 };
-
-// Component to display the seller trust level with icon and hover info
 const SellerTrustIndicator: React.FC<{ trustInfo: SellerTrustInfo }> = ({ trustInfo }) => {
     const details = {
         good: { Icon: CheckCircle, color: 'text-green-600 dark:text-green-400', text: 'Good Seller Rating' },
@@ -118,20 +98,15 @@ const SellerTrustIndicator: React.FC<{ trustInfo: SellerTrustInfo }> = ({ trustI
         poor: { Icon: AlertTriangle, color: 'text-red-600 dark:text-red-400', text: 'Low Seller Rating' },
         unknown: { Icon: HelpCircle, color: 'text-gray-500 dark:text-gray-400', text: 'Seller Info Unknown' }
     }[trustInfo.level];
-
     const [isPopoverVisible, setIsPopoverVisible] = useState(false);
-
-    // Don't render if level is unknown and message indicates unavailability
     if (trustInfo.level === 'unknown' && trustInfo.message === 'Seller information not available.') {
       return null;
     }
-
-
     return (
         <div className={`relative flex items-center space-x-1 text-xs ${details.color}`}>
-            <details.Icon className="w-3.5 h-3.5 flex-shrink-0" /> {/* Added flex-shrink-0 */}
+            <details.Icon className="w-3.5 h-3.5 flex-shrink-0" />
             <span
-                className="cursor-help whitespace-nowrap" // Added whitespace-nowrap
+                className="cursor-help whitespace-nowrap"
                 onMouseEnter={() => setIsPopoverVisible(true)}
                 onMouseLeave={() => setIsPopoverVisible(false)}
             >
@@ -166,6 +141,23 @@ const findWatchlistItemId = (productId: number | undefined, watchlist: Watchlist
     return item ? item.id : null;
 };
 
+// --- FIX 1: Add "1h" and "6h" to the RangeOption type ---
+type RangeOption = "1h" | "6h" | "24h" | "7d" | "30d" | "90d" | "1y" | "all";
+
+// --- UPDATED: historyRanges now includes "1h" and "6h" ---
+const historyRanges: { value: RangeOption; label: string }[] = [
+  { value: '1h', label: '1H' },
+  { value: '6h', label: '6H' },
+  { value: '24h', label: '24H' },
+  { value: '7d', label: '7D' },
+  { value: '30d', label: '30D' },
+  { value: '90d', label: '90D' },
+  { value: '1y', label: '1Y' },
+  { value: 'all', label: 'All' },
+];
+// --- END FIX ---
+
+
 // --- Main Component ---
 export default function ProductDetail() {
   const { productId } = useParams<{ productId: string }>();
@@ -181,44 +173,43 @@ export default function ProductDetail() {
   const { user } = useAuth();
   const [scamScore, setScamScore] = useState<ScamScore | null>(null);
   const [isScamScoreLoading, setIsScamScoreLoading] = useState(true);
+  
+  const [historyRange, setHistoryRange] = useState<RangeOption>("30d");
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
 
   // Live update WebSocket Effect
   useEffect(() => {
     if (lastMessage && lastMessage.type === 'PRICE_UPDATE' && lastMessage.product_id === numProductId) {
       console.log("Live update received!", lastMessage);
-      // --- 1. UPDATE CURRENT PRICE STATE (Existing Logic) ---
+      
+      // 1. UPDATE CURRENT PRICE
       setProduct(prevProduct => {
         if (!prevProduct) return null;
 
+        let sourceExists = false;
         const updatedPrices = prevProduct.prices.map(priceInfo => {
-          // Find the price info for the source that just updated
           if (priceInfo.source_name.toLowerCase() === lastMessage.source_name.toLowerCase()) {
+            sourceExists = true;
             return {
                 ...priceInfo,
                 current_price: lastMessage.new_price,
-                // Update all fields from the WebSocket message
-                seller_name: lastMessage.seller_name !== undefined ? lastMessage.seller_name : priceInfo.seller_name,
-                seller_rating: lastMessage.seller_rating !== undefined ? lastMessage.seller_rating : priceInfo.seller_rating,
-                seller_review_count: lastMessage.seller_review_count !== undefined ? lastMessage.seller_review_count : priceInfo.seller_review_count,
-                avg_review_sentiment: lastMessage.avg_review_sentiment !== undefined ? lastMessage.avg_review_sentiment : priceInfo.avg_review_sentiment,
+                seller_name: lastMessage.seller_name,
+                seller_rating: lastMessage.seller_rating,
+                seller_review_count: lastMessage.seller_review_count,
+                avg_review_sentiment: lastMessage.avg_review_sentiment,
             };
           }
           return priceInfo;
         });
 
-        // Check if the source is new (e.g., product was tracked, but this is the first scrape from this source)
-        const sourceExists = prevProduct.prices.some(
-          p => p.source_name.toLowerCase() === lastMessage.source_name.toLowerCase()
-        );
-
         if (!sourceExists && lastMessage.source_name) {
             updatedPrices.push({
                 source_name: lastMessage.source_name,
                 current_price: lastMessage.new_price,
-                currency: "INR", // Defaults, adjust if needed
-                availability: "In Stock", // Default from WS
+                currency: "INR",
+                availability: "In Stock",
                 in_stock: true,
-                url: "", // URL not in WS message, but not critical for this update
+                url: "",
                 seller_name: lastMessage.seller_name,
                 seller_rating: lastMessage.seller_rating,
                 seller_review_count: lastMessage.seller_review_count,
@@ -226,26 +217,26 @@ export default function ProductDetail() {
             });
         }
 
-        // Update the "Lowest Ever" price
         const newLowest = Math.min(
           prevProduct.lowest_ever_price || Infinity,
           lastMessage.new_price
         );
-
         return { ...prevProduct, prices: updatedPrices, lowest_ever_price: newLowest };
       });
 
-      // --- 2. UPDATE PRICE HISTORY STATE (This is the new part) ---
-      const newHistoryItem: PriceHistoryItem = {
-        date: new Date().toLocaleDateString(), // Format to match initial fetch (e.g., "10/30/2025")
-        price: lastMessage.new_price,
-        source: lastMessage.source_name || 'Unknown' // Use source_name from message
-      };
-
-      // Append the new item to the history array, which will re-render the chart
-      setHistory(prevHistory => [...prevHistory, newHistoryItem]);
+      // 2. UPDATE PRICE HISTORY (Only if viewing recent data)
+      // This check is now valid because RangeOption includes 1h and 6h
+      if (historyRange === '1h' || historyRange === '6h' || historyRange === '24h' || historyRange === '7d' || historyRange === '30d') {
+        const newHistoryItem: PriceHistoryItem = {
+          date: new Date().toISOString(),
+          price: lastMessage.new_price,
+          source: lastMessage.seller_name || lastMessage.source_name || 'Unknown'
+        };
+        setHistory(prevHistory => [...prevHistory, newHistoryItem]);
+      }
     }
-  }, [lastMessage, numProductId]);
+  }, [lastMessage, numProductId, historyRange]);
+
 
   // Data Fetching Effect
   useEffect(() => {
@@ -253,32 +244,23 @@ export default function ProductDetail() {
     const numProductId = parseInt(productId);
     if (isNaN(numProductId)) { setIsLoading(false); setProduct(null); return; }
 
-    const fetchAllData = async () => {
+    const fetchProductShell = async () => {
       setIsLoading(true);
       setIsScamScoreLoading(true);
       setProduct(null);
       setScamScore(null);
-      setHistory([]); // Clear history too
 
       try {
-        // Fetch product and history
-        const productPromise = getProduct(numProductId);
-        const historyPromise = getPriceHistory(numProductId);
-        const [productData, historyData] = await Promise.all([productPromise, historyPromise]);
-
+        const productData = await getProduct(numProductId);
         setProduct(productData);
-        setHistory(historyData.map((h: PriceHistoryItem) => ({
-            ...h,
-            date: new Date(h.date).toLocaleDateString()
-        })));
 
         // Fetch watchlist
-        setIsWatchlisted(productData.is_in_watchlist); // Set initial
+        setIsWatchlisted(productData.is_in_watchlist);
         try {
             const watchlistData = await getWatchlist();
             setUserWatchlist(watchlistData);
             const watchlistItem = watchlistData.find(item => item.product_id === numProductId);
-            setIsWatchlisted(!!watchlistItem); // Update with actual
+            setIsWatchlisted(!!watchlistItem);
         } catch (watchlistError) {
             console.warn("Could not fetch watchlist, using product default.", watchlistError);
         }
@@ -288,44 +270,69 @@ export default function ProductDetail() {
         if (productData.prices.length > 0 && productData.prices[0].url) {
             domainToCheck = getDomainFromUrl(productData.prices[0].url);
         }
-
         if (domainToCheck) {
             try {
                 const scoreData = await getScamScore(domainToCheck);
                 setScamScore(scoreData);
             } catch (scamError) {
                 console.error("Failed to fetch scam score:", scamError);
-                setScamScore(null);
             } finally {
                  setIsScamScoreLoading(false);
             }
         } else {
-            setIsScamScoreLoading(false); // No domain, finish loading
+            setIsScamScoreLoading(false);
         }
-
       } catch (error) {
         console.error("Failed to fetch essential product details:", error);
         setProduct(null);
-        setIsScamScoreLoading(false); // Ensure loading stops on error
+        setIsScamScoreLoading(false);
       } finally {
         setIsLoading(false);
       }
     };
-    fetchAllData();
-  }, [productId]); // Re-run ALL fetches if the productId changes
+    
+    fetchProductShell();
+  }, [productId]);
 
 
-  // Event Handlers
+  // NEW EFFECT: Fetch History based on Range
+  useEffect(() => {
+    if (!numProductId) return;
+
+    const fetchHistory = async () => {
+      setIsHistoryLoading(true);
+      setHistory([]);
+      try {
+        const historyData = await getPriceHistory(numProductId, historyRange);
+        
+        const formattedHistory = historyData.map((h: PriceHistoryItem) => ({
+            ...h,
+            date: h.date, 
+            [h.source || 'Price']: h.price 
+        }));
+        
+        setHistory(formattedHistory);
+        
+      } catch (error) {
+        console.error("Failed to fetch price history:", error);
+      } finally {
+        setIsHistoryLoading(false);
+      }
+    };
+    
+    fetchHistory();
+  }, [numProductId, historyRange]);
+
+
+  // Event Handlers (Unchanged)
   const handleToggleWatchlist = async () => {
     if (!product) return;
-
     if (!user) {
       if (window.confirm("You need to be logged in to save items to your watchlist.\n\nClick OK to go to the login page.")) {
         navigate('/login');
       }
       return;
     }
-
     const currentProductId = product.id;
     try {
       if (isWatchlisted) {
@@ -335,7 +342,6 @@ export default function ProductDetail() {
           setUserWatchlist(prev => prev.filter(item => item.id !== watchlistItemIdToRemove));
           setIsWatchlisted(false);
         } else {
-           console.error("Could not find watchlist item ID to remove.");
            alert("Error: Could not find item in watchlist to remove.");
            return;
         }
@@ -346,7 +352,7 @@ export default function ProductDetail() {
       }
     } catch (error) {
       console.error("Failed to update watchlist:", error);
-      alert("Failed to update watchlist status."); // This is the alert you saw
+      alert("Failed to update watchlist status.");
     }
   };
 
@@ -370,13 +376,14 @@ export default function ProductDetail() {
     return <div className="text-center p-8 card bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300">Product not found or failed to load.</div>;
   }
 
-  // Determine latest price for overview card (simple check)
   const latestPriceInfoForOverview = product.prices.length > 0 ? product.prices[0] : null;
+  const sellers = Array.from(new Set(history.map(item => item.source || 'Price')));
+  const lineColors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#0088FE', '#00C49F'];
 
   // Render JSX
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Header (Unchanged) */}
       <div className="flex justify-between items-start gap-4">
         <div className="flex-1 min-w-0">
           <Link to="/all-products" className="flex items-center space-x-2 text-sm text-gray-500 hover:text-black dark:hover:text-white mb-4">
@@ -397,7 +404,7 @@ export default function ProductDetail() {
 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Left Column (Image & Prices) */}
+        {/* Left Column (Image & Prices) - (Unchanged) */}
         <div className="md:col-span-1 space-y-4">
           <div className="card p-4 flex justify-center items-center aspect-square">
             <img src={product.image_url || 'https://via.placeholder.com/300?text=No+Image'} alt={product.title} className="rounded-lg object-contain w-full h-full max-h-80" />
@@ -405,7 +412,7 @@ export default function ProductDetail() {
           <div className="card">
              <h3 className="text-lg font-semibold mb-4 flex items-center"><Tag className="w-5 h-5 mr-2" /> Current Prices</h3>
              <div className="space-y-4">
-               {product.prices.length > 0 ? product.prices.map(price => {
+               {product.prices.length > 0 ? product.prices.map((price: PriceInfo) => {
                    const sellerTrustInfo = getSellerTrustLevel(price.seller_rating, price.seller_review_count);
                    return (
                      <div key={`${price.source_name}-${price.url}`} className="pb-3 border-b border-gray-100 dark:border-gray-800 last:border-b-0 last:pb-0">
@@ -421,7 +428,6 @@ export default function ProductDetail() {
                                 <span className="flex items-center space-x-1">
                                     <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
                                     <span>{price.seller_rating}</span>
-                                    {/* Make sure seller_review_count is treated as string before toLocaleString */}
                                     {price.seller_review_count && <span>({parseReviewCount(price.seller_review_count)?.toLocaleString() ?? price.seller_review_count})</span>}
                                 </span>
                                 )}
@@ -433,14 +439,13 @@ export default function ProductDetail() {
                    );
                }) : <p className="text-sm text-gray-500">No current price information available.</p>}
              </div>
-             {/* Domain Trust Badge */}
              <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                 <TrustBadge scoreData={scamScore} isLoading={isScamScoreLoading} />
              </div>
           </div>
         </div>
 
-        {/* Right Column (Chart & Details) */}
+        {/* Right Column (Chart & Details) - (Unchanged) */}
         <div className="md:col-span-2 space-y-4">
           <div className="card">
             <h3 className="text-lg font-semibold mb-2">Price Overview</h3>
@@ -453,19 +458,64 @@ export default function ProductDetail() {
           </div>
 
           <div className="card">
-            <h3 className="text-lg font-semibold mb-4 flex items-center"><BarChart2 className="w-5 h-5 mr-2" /> Price History (Last 30 Days)</h3>
-            {history.length > 1 ? (
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4">
+              <h3 className="text-lg font-semibold flex items-center"><BarChart2 className="w-5 h-5 mr-2" /> Price History</h3>
+              <div className="flex-shrink-0">
+                <div className="flex items-center space-x-1 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                  {historyRanges.map((range) => (
+                    <button
+                      key={range.value}
+                      onClick={() => setHistoryRange(range.value)}
+                      className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                        historyRange === range.value
+                          ? 'bg-white dark:bg-gray-700 text-black dark:text-white shadow-sm'
+                          : 'text-gray-600 dark:text-gray-400 hover:bg-white/50 dark:hover:bg-gray-700/50'
+                      }`}
+                    >
+                      {range.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            
+            {isHistoryLoading ? (
+               <div className="text-center p-8 h-[300px] flex items-center justify-center">Loading chart data...</div>
+            ) : history.length > 1 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <LineChart data={history} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb dark:stroke-gray-700" />
-                  <XAxis dataKey="date" />
+                  <XAxis 
+                    dataKey="date" 
+                    tickFormatter={(dateStr) => {
+                      const date = new Date(dateStr);
+                      // This check is now valid
+                      if (historyRange === '24h' || historyRange === '6h' || historyRange === '1h') {
+                        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                      }
+                      return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+                    }}
+                  />
                   <YAxis domain={['dataMin - 100', 'dataMax + 100']} allowDecimals={false}/>
-                  <Tooltip />
+                  <Tooltip 
+                    labelFormatter={(dateStr) => new Date(dateStr).toLocaleString()}
+                    formatter={(value: number) => [`₹${value.toLocaleString()}`, "Price"]}
+                  />
                   <Legend />
-                  <Line type="monotone" dataKey="price" stroke="#8884d8" activeDot={{ r: 8 }} name="Price (₹)" />
+                  {sellers.map((seller, index) => (
+                    <Line 
+                      key={seller}
+                      type="monotone" 
+                      dataKey={seller} 
+                      stroke={lineColors[index % lineColors.length]} 
+                      activeDot={{ r: 8 }} 
+                      name={seller} 
+                      connectNulls 
+                    />
+                  ))}
                 </LineChart>
               </ResponsiveContainer>
-            ) : <p className="text-sm text-gray-500">Not enough price history available to display a chart yet (needs at least 2 price points).</p>}
+            ) : <p className="text-sm text-gray-500 h-[300px] flex items-center justify-center">Not enough price history available for this range.</p>}
           </div>
 
           <div className="card">
@@ -475,7 +525,7 @@ export default function ProductDetail() {
         </div>
       </div>
 
-      {/* Danger Zone */}
+      {/* Danger Zone - FIX 2: Corrected closing tag */}
       <div className="card border-red-500/30 dark:border-red-500/50 mt-8">
         <h3 className="text-lg font-semibold text-red-700 dark:text-red-400 flex items-center space-x-2">
           <AlertTriangle className="w-5 h-5" />
@@ -483,7 +533,7 @@ export default function ProductDetail() {
         </h3>
         <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 mb-4">
           Permanently stop tracking this item. This action cannot be undone.
-        </p>
+        </p> {/* <-- This was </section> */}
         <button
           onClick={handleDelete}
           className="btn-secondary text-sm bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40"

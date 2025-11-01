@@ -1,83 +1,52 @@
+# worker/playwright_scraper/runner.py
 import os
 import sys
 import json
 from redis import Redis
 from rq import Worker, Queue
 from dotenv import load_dotenv
-# --- 1. Import JSON from sqlalchemy ---
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Boolean, ForeignKey, Float, JSON
-from sqlalchemy.orm import sessionmaker, relationship, declarative_base
-from sqlalchemy.sql import func
+# --- FIX: Import Date from sqlalchemy ---
+from sqlalchemy import create_engine, desc, func
+from sqlalchemy.orm import sessionmaker, Session
 from contextlib import contextmanager
 import whois
 from datetime import datetime, timezone, timedelta
-from typing import List 
+from typing import List, Optional 
 from playwright_scraper.sales_discovery import discover_all_sales 
 from pywebpush import webpush, WebPushException
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from playwright_scraper.scrapers import get_scraper
-# --- END VADER IMPORT ---
+
+# --- FIX: Import from aggregation.py ---
+from .aggregation import run_aggregation_jobs
+
+# --- FIX: Import all models from models.py ---
+from .models import (
+    Base,
+    SessionLocal,
+    User,
+    Product,
+    Source,
+    Seller,
+    ProductSource,
+    PriceLog,
+    ScamScore,
+    Watchlist,
+    PriceHistoryDaily,
+    PriceHistoryMonthly
+)
+# --- END MODEL IMPORT ---
 
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from playwright_scraper.scrapers import get_scraper
-
-# --- 1. Load Environment & Database Setup ---
+# --- 1. Load Environment ---
 load_dotenv()
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://pricetrackr:testpassword@localhost:5432/pricetrackr")
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
-# Setup database connection
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
-
-class User(Base):
-    __tablename__ = "users"
-    id = Column(Integer, primary_key=True, index=True)
-    email = Column(String(100), unique=True, index=True, nullable=False)
-    hashed_password = Column(String(200), nullable=False)
-    full_name = Column(String(200), nullable=True)
-    is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    push_subscription = Column(JSON, nullable=True) # <-- Add this
-
-# --- 2. Define Minimal Database Models ---
-class Product(Base):
-    __tablename__ = "products"
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String(500), nullable=False)
-    brand = Column(String(200), nullable=True)
-    image_url = Column(Text, nullable=True)
-    description = Column(Text, nullable=True)
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-
-class PriceLog(Base):
-    __tablename__ = "price_logs"
-    id = Column(Integer, primary_key=True, index=True)
-    product_source_id = Column(Integer, nullable=False) # Changed from ForeignKey for simplicity in worker
-    price_cents = Column(Integer, nullable=False)
-    currency = Column(String(3), default="INR")
-    availability = Column(String(50), default="Unknown")
-    in_stock = Column(Boolean, default=True)
-    scraped_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
-    seller_name = Column(String(200), nullable=True)
-    seller_rating = Column(String(100), nullable=True)
-    seller_review_count = Column(String(100), nullable=True)
-    avg_review_sentiment = Column(Float, nullable=True)
-
-
-class ScamScore(Base):
-    __tablename__ = "scam_scores"
-    id = Column(Integer, primary_key=True, index=True)
-    domain = Column(String(200), unique=True, nullable=False, index=True)
-    whois_days_old = Column(Integer, nullable=True)
-    safe_browsing_flag = Column(Boolean, default=False)
-    trust_signals = Column(Float, default=0.0) 
-    score = Column(Float, default=0.0)
-    last_checked = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+# Redis connection for Pub/Sub
+redis_conn = Redis.from_url(REDIS_URL)
 
 # Context manager for database sessions
 @contextmanager
@@ -88,13 +57,52 @@ def get_db_session():
     finally:
         db.close()
 
-# Redis connection for Pub/Sub
-redis_conn = Redis.from_url(REDIS_URL)
 
-# --- 3. The Product Scraper Task ---
+# --- 3. HELPER: Get or Create Seller ---
+def get_or_create_seller(db: Session, marketplace: str, seller_name: str, seller_rating: str, review_count: str) -> Optional[Seller]:
+    """Upserts a seller in the database."""
+    if not seller_name:
+        return None
+        
+    try:
+        # Try to find an existing seller by name and marketplace
+        existing_seller = db.query(Seller).filter(
+            Seller.marketplace == marketplace,
+            Seller.seller_name == seller_name
+        ).first()
+
+        if existing_seller:
+            # Update existing seller's info if it's new
+            existing_seller.seller_rating = seller_rating or existing_seller.seller_rating
+            existing_seller.review_count = review_count or existing_seller.review_count
+            existing_seller.last_seen = datetime.now(timezone.utc)
+            db.commit()
+            db.refresh(existing_seller)
+            return existing_seller
+        else:
+            # Create a new seller
+            new_seller = Seller(
+                marketplace=marketplace,
+                seller_name=seller_name,
+                seller_rating=seller_rating,
+                review_count=review_count
+            )
+            db.add(new_seller)
+            db.commit()
+            db.refresh(new_seller)
+            return new_seller
+    except Exception as e:
+        db.rollback()
+        print(f"[Worker] Error in get_or_create_seller: {e}")
+        return None
+
+
+# --- 4. The UPDATED Product Scraper Task ---
 def scrape_and_save_product(url: str, product_id: int, source_id: int):
-    """Worker task to scrape a product, analyze reviews, AND save data to DB"""
+    """Worker task to scrape a product, update seller, save price IF changed, and publish."""
     print(f"[Worker] Scraping: {url} (ProductID: {product_id})")
+    
+    scraper = None
     try:
         scraper = get_scraper(url)
         data = scraper.scrape() 
@@ -115,69 +123,85 @@ def scrape_and_save_product(url: str, product_id: int, source_id: int):
                     vs = analyzer.polarity_scores(review_text)
                     total_compound_score += vs['compound']
                     valid_reviews_count += 1
-            
             if valid_reviews_count > 0:
                 avg_sentiment_score = total_compound_score / valid_reviews_count
-                print(f"[Worker] Calculated avg sentiment from {valid_reviews_count} reviews: {avg_sentiment_score:.3f}")
-            else:
-                print("[Worker] No valid review text found for sentiment analysis.")
-        else:
-             print("[Worker] No reviews extracted for sentiment analysis.")
         # --- End Sentiment Analysis ---
 
 
         with get_db_session() as db:
-            # Step 1: Create the new PriceLog
-            new_price_log = PriceLog(
-                product_source_id=source_id,
-                price_cents=data.get("price", 0),
-                currency=data.get("currency", "INR"),
-                availability=data.get("availability", "Unknown"),
-                in_stock=data.get("in_stock", True),
+            # --- NEW SELLER LOGIC ---
+            product_source = db.query(ProductSource).filter(ProductSource.id == source_id).first()
+            if not product_source:
+                 print(f"[Worker] ProductSource {source_id} not found. Aborting.")
+                 return None
+
+            marketplace_name = scraper.__class__.__name__.replace("Scraper", "")
+            seller = get_or_create_seller(
+                db,
+                marketplace=marketplace_name,
                 seller_name=data.get("seller_name"),
                 seller_rating=data.get("seller_rating"),
-                seller_review_count=data.get("seller_review_count"),
-                avg_review_sentiment=avg_sentiment_score # Save calculated sentiment
+                review_count=data.get("seller_review_count")
             )
-            db.add(new_price_log)
+            
+            # Link ProductSource to the Seller if not already linked or if changed
+            if seller and product_source.seller_id != seller.id:
+                product_source.seller_id = seller.id
+                # db.commit() # Commit will happen below
+                print(f"[Worker] Linked ProductSource {source_id} to Seller {seller.id} ({seller.seller_name})")
+            # --- END SELLER LOGIC ---
+
+            # --- NEW: CHECK IF PRICE CHANGED ---
+            last_price_log = db.query(PriceLog).filter(
+                PriceLog.product_source_id == source_id
+            ).order_by(desc(PriceLog.scraped_at)).first()
+
+            new_price_cents = data.get("price", 0)
+            
+            if last_price_log and last_price_log.price_cents == new_price_cents:
+                print(f"[Worker] Price for {product_id} is unchanged (₹{new_price_cents / 100}). Skipping log entry.")
+                # We still might want to update product info
+            else:
+                print(f"[Worker] Price changed (or is new). Old: {last_price_log.price_cents if last_price_log else 'N/A'}, New: {new_price_cents}. Saving new log.")
+                # Step 1: Create the new PriceLog (columns removed)
+                new_price_log = PriceLog(
+                    product_source_id=source_id,
+                    price_cents=new_price_cents,
+                    currency=data.get("currency", "INR"),
+                    availability=data.get("availability", "Unknown"),
+                    in_stock=data.get("in_stock", True),
+                    avg_review_sentiment=avg_sentiment_score # Save calculated sentiment
+                )
+                db.add(new_price_log)
             
             # Step 2: Update the main Product entry (if needed)
             product = db.query(Product).filter(Product.id == product_id).first()
-            product_source = db.query(ProductSource).filter(ProductSource.id == source_id).first()
-
-            if not product or not product_source:
-                print(f"[Worker] Product {product_id} or Source {source_id} was deleted. Skipping price log save.")
-                return None
-            
-            new_price_log = PriceLog(
-                product_source_id=source_id,
-                # ... (rest of PriceLog fields) ...
-            )
-            db.add(new_price_log)
-            
             if product:
-                # Only update if scraper provided new info
                 product.title = data.get("title") or product.title
                 product.image_url = data.get("image_url") or product.image_url
                 product.description = data.get("description") or product.description
                 product.brand = data.get("brand") or product.brand
             
             db.commit()
-            print(f"[Worker] ✅ Success. Saved new price & sentiment for {product.title if product else 'product_id ' + str(product_id)}: Price={data.get('price')}, Sentiment={avg_sentiment_score}")
+            print(f"[Worker] ✅ Success. DB updated for {product.title if product else 'product_id ' + str(product_id)}")
             
-            # Step 3: Publish update to Redis (No change needed here for now)
+            # Step 3: Publish update to Redis
             try:
+                # Refresh seller from the product_source relationship
+                db.refresh(product_source)
+                seller_info = product_source.seller
+                
                 update_message = json.dumps({
                     "type": "PRICE_UPDATE",
                     "product_id": product_id,
-                    "new_price": new_price_log.price_cents / 100,
+                    "new_price": new_price_cents / 100,
                     "source_id": source_id,
-                    "source_name": scraper.__class__.__name__.replace("Scraper", ""),
-                    # We could add sentiment here if needed for live updates
-                    "seller_name": new_price_log.seller_name,
-                    "seller_rating": new_price_log.seller_rating,
-                    "seller_review_count": new_price_log.seller_review_count,
-                    "avg_review_sentiment": new_price_log.avg_review_sentiment
+                    "source_name": marketplace_name,
+                    # --- UPDATED: Pull seller info from the seller object ---
+                    "seller_name": seller_info.seller_name if seller_info else None,
+                    "seller_rating": seller_info.seller_rating if seller_info else None,
+                    "seller_review_count": seller_info.review_count if seller_info else None,
+                    "avg_review_sentiment": avg_sentiment_score
                 })
                 redis_conn.publish("price_updates", update_message)
                 print(f"[Worker] 📢 Published update to 'price_updates' channel.")
@@ -192,15 +216,14 @@ def scrape_and_save_product(url: str, product_id: int, source_id: int):
         return None
 
 
-# --- 4. Scam Check Task (remains the same for now) ---
+# --- 5. Scam Check Task (remains the same) ---
 def compute_scam_score(domain: str):
     """Worker task to compute domain scam score using WHOIS."""
-    # ... (WHOIS logic remains unchanged) ...
+    # ... (This function is unchanged) ...
     print(f"[Worker] Computing scam score for: {domain}")
     with get_db_session() as db:
         existing_score = db.query(ScamScore).filter(ScamScore.domain == domain).first()
         if existing_score:
-            # Simple check: Refresh if older than 30 days
             thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
             if existing_score.last_checked and existing_score.last_checked > thirty_days_ago:
                  print(f"[Worker] Score for {domain} is recent. Skipping.")
@@ -209,106 +232,68 @@ def compute_scam_score(domain: str):
         else:
             print(f"[Worker] No score found for {domain}. Computing new score.")
 
-
-        score = 50.0  # Default score
+        score = 50.0 
         days_old = None
-        signals = {} # To store evidence/reasons
+        signals = {}
 
         try:
             w = whois.whois(domain)
             creation_date = w.creation_date
-            # Handle cases where creation_date might be a list
             if isinstance(creation_date, list):
                 creation_date = creation_date[0] if creation_date else None
             
             if creation_date:
                 now_utc = datetime.now(timezone.utc)
-                # Ensure creation_date is timezone-aware (assume UTC if not)
                 if creation_date.tzinfo is None:
                     creation_date = creation_date.replace(tzinfo=timezone.utc)
-                    
                 days_old = (now_utc - creation_date).days
                 signals['whois_age_days'] = days_old
-                
-                # Apply scoring rule based on age
-                if days_old < 90: # Less than 3 months
-                    score = 20.0 # Suspicious
-                elif days_old < 365: # Less than 1 year
-                    score = 45.0 # Caution
-                else: # Over 1 year
-                    score = 80.0 # Looks Good
+                if days_old < 90: score = 20.0
+                elif days_old < 365: score = 45.0
+                else: score = 80.0
             else:
                  signals['whois_age_days'] = 'Not Found'
-                 score = 40.0 # Caution if age unknown
-
-            # Placeholder for other signals like SSL check, blacklist check etc.
-            # signals['ssl_valid'] = True # Example
-            # signals['blacklist_check'] = 'clean' # Example
+                 score = 40.0
             
             if existing_score:
-                 # Update existing record
                  existing_score.whois_days_old = days_old
                  existing_score.score = score
-                 existing_score.trust_signals = signals.get('whois_age_days', 0.0) # Update evidence
-                 existing_score.last_checked = datetime.now(timezone.utc) # Update check time
+                 existing_score.trust_signals = signals.get('whois_age_days', 0.0)
+                 existing_score.last_checked = datetime.now(timezone.utc)
                  print(f"[Worker] ✅ Success. Updated score for {domain}: {score}")
             else:
-                 # Create new record
                  new_score = ScamScore(
                      domain=domain,
                      whois_days_old=days_old,
-                     safe_browsing_flag=False, # Placeholder
-                     trust_signals=signals.get('whois_age_days', 0.0), # Store main signal
+                     safe_browsing_flag=False,
+                     trust_signals=signals.get('whois_age_days', 0.0),
                      score=score
                  )
                  db.add(new_score)
                  print(f"[Worker] ✅ Success. Saved new score for {domain}: {score}")
-
             db.commit()
-
-
         except Exception as e:
             import traceback
             print(f"[Worker] ❌ CRITICAL ERROR checking WHOIS for {domain}: {e}\n{traceback.format_exc()}")
-            # Save a default "unknown" score if error & doesn't exist, update last_checked if it does
             if not existing_score:
                 default_score = ScamScore(domain=domain, score=50.0, trust_signals=0.0)
                 db.add(default_score)
                 db.commit()
             elif existing_score:
-                 existing_score.last_checked = datetime.now(timezone.utc) # Update check time even on error
+                 existing_score.last_checked = datetime.now(timezone.utc)
                  db.commit()
             return
         
-# --- 4. Price Alert Check Task ---
+# --- 6. Price Alert Check Task (remains the same) ---
 def check_price_alerts():
     """
     Worker task to check all active price alerts against the latest prices.
     """
+    # ... (This function is unchanged) ...
     print("[Worker] Checking all active price alerts...")
-    
-    # We need to import Watchlist and Product here
-    # Make sure they are imported from the models
-    from sqlalchemy import select, desc
-    
-    # These models are already defined at the top of your file,
-    # but we need Watchlist and ProductSource
-    class ProductSource(Base):
-        __tablename__ = "product_sources"
-        id = Column(Integer, primary_key=True, index=True)
-        product_id = Column(Integer, nullable=False)
-        url = Column(Text, nullable=True)
-
-    class Watchlist(Base):
-        __tablename__ = "watchlists"
-        id = Column(Integer, primary_key=True, index=True)
-        user_id = Column(String(100), nullable=True) # This is the user's email
-        product_id = Column(Integer, nullable=False)
-        alert_rules = Column(JSON, nullable=True)
     
     triggered_alerts = 0
     with get_db_session() as db:
-        # 1. Get all watchlist items that have an alert rule
         items_to_check = db.query(Watchlist).filter(
             Watchlist.alert_rules != None
         ).all()
@@ -318,12 +303,11 @@ def check_price_alerts():
         for item in items_to_check:
             try:
                 alert_price = item.alert_rules.get("threshold")
-                user_email = item.user_id # This is the email
+                user_email = item.user_id 
                 
                 if not alert_price or not user_email:
                     continue
                 
-                # 2. Find all sources for this product
                 product_sources = db.query(ProductSource).filter(ProductSource.product_id == item.product_id).all()
                 if not product_sources: continue
                 
@@ -338,12 +322,9 @@ def check_price_alerts():
                         if lowest_current_price is None or current_price < lowest_current_price:
                             lowest_current_price = current_price
                 
-                # 4. Check if the alert is triggered
                 if lowest_current_price and lowest_current_price <= alert_price:
                     print(f"[Worker]  TRIGGER! Product {item.product_id} is {lowest_current_price}, below alert of {alert_price} for user {item.user_id}")
                     
-                    # 5. Publish an alert message
-                    # We can re-use the 'price_updates' channel
                     alert_message = json.dumps({
                         "type": "PRICE_ALERT",
                         "product_id": item.product_id,
@@ -354,19 +335,17 @@ def check_price_alerts():
                     redis_conn.publish("price_updates", alert_message)
                     triggered_alerts += 1
 
-                    # --- 5. NEW: SEND PUSH NOTIFICATION ---
                     user = db.query(User).filter(User.email == user_email).first()
                     if user and user.push_subscription:
                         print(f"[Worker]  Found push subscription for {user_email}. Sending push...")
                         try:
-                            # Load VAPID keys from environment
                             vapid_private_key = os.getenv("VAPID_PRIVATE_KEY")
                             vapid_claims = {"sub": f"mailto:{os.getenv('VAPID_CLAIMS_EMAIL')}"}
                             
                             payload = json.dumps({
                                 "title": "Price Alert!",
                                 "body": f"Price for Product ID {item.product_id} dropped to ₹{lowest_current_price}!",
-                                "url": f"/product/{item.product_id}" # URL to open on click
+                                "url": f"/product/{item.product_id}"
                             })
 
                             webpush(
@@ -379,26 +358,20 @@ def check_price_alerts():
 
                         except WebPushException as ex:
                             print(f"[Worker]  ❌ Error sending push: {ex}")
-                            # If subscription is invalid (e.g., 410 Gone), remove it
                             if ex.response and ex.response.status_code in [404, 410]:
                                 print(f"[Worker]  Subscription for {user_email} is invalid. Removing.")
                                 user.push_subscription = None
                                 db.commit()
                         except Exception as e:
                             print(f"[Worker]  ❌ Unexpected error during webpush: {e}")
-                    # --- END PUSH NOTIFICATION ---
-
             except Exception as e:
                 print(f"[Worker] Error checking alert for item {item.id}: {e}")
                 
     print(f"[Worker] Finished alert check. Triggered {triggered_alerts} alerts.")
     return triggered_alerts
 
-def check_price_alerts():
-    # ... (existing function) ...
-    pass
 
-# --- ADD THIS NEW FUNCTION ---
+# --- 7. Sales Discovery Task (remains the same) ---
 def run_sales_discovery_job():
     """Worker task to discover and add new sales."""
     print("[Worker] Running sales discovery job...")
@@ -407,19 +380,34 @@ def run_sales_discovery_job():
         print("[Worker] ✅ Sales discovery job complete.")
     except Exception as e:
         print(f"[Worker] ❌ CRITICAL ERROR in sales discovery: {e}")
-# --- END NEW FUNCTION ---
+
+# --- 8. Aggregation Task ---
+def run_aggregation_job():
+    """Worker task to run daily and monthly aggregations."""
+    print("[Worker] Running price aggregation job...")
+    try:
+        # --- FIX: Use relative import ---
+        from .aggregation import run_aggregation_jobs
+        run_aggregation_jobs()
+        print("[Worker] ✅ Price aggregation job complete.")
+    except Exception as e:
+        import traceback
+        print(f"[Worker] ❌ CRITICAL ERROR in price aggregation: {e}\n{traceback.format_exc()}")
+
 
 # --- Main Worker Execution ---
 if __name__ == "__main__":
-    # ... (existing code) ...
-
     # Create queues
     scraper_queue = Queue("scraping", connection=redis_conn)
     scam_queue = Queue("scam_checks", connection=redis_conn)
     alert_queue = Queue("alerts", connection=redis_conn)
-    sales_queue = Queue("sales_discovery", connection=redis_conn) # <-- ADD THIS NEW QUEUE
+    sales_queue = Queue("sales_discovery", connection=redis_conn)
+    aggregate_queue = Queue("aggregation", connection=redis_conn)
 
     # Start worker for all queues
-    worker = Worker([scraper_queue, scam_queue, alert_queue, sales_queue], connection=redis_conn) # <-- ADD IT HERE
-    print("🚀 Scraper worker started... Listening for jobs on 'scraping', 'scam_checks', 'alerts', and 'sales_discovery'.")
+    worker = Worker(
+        [scraper_queue, scam_queue, alert_queue, sales_queue, aggregate_queue],
+        connection=redis_conn
+    )
+    print("🚀 Scraper worker started... Listening for jobs on 'scraping', 'scam_checks', 'alerts', 'sales_discovery', and 'aggregation'.")
     worker.work()

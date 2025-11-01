@@ -1,20 +1,21 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List
 from urllib.parse import urlparse
 from ..database import get_db
-# Corrected Imports Start Here
-# --- IMPORT THE NEW SCHEMA ---
+# Corrected Imports
 from ..schemas.product import ProductCreate, ProductResponse, ProductDetail, ProductWithHistorySchema
 from ..schemas.price import PriceHistory
 from ..schemas.extension import ProductDataFromExtension
 from ..crud import products as crud_products
-from ..crud import prices as crud_prices
-from ..models import Product, Source, ProductSource, PriceLog, ScamScore
+from ..crud import prices as crud_prices # Import crud_prices
+from ..models import Product, Source, ProductSource, PriceLog, ScamScore, Seller
 from ..crud import watchlist as crud_watchlist
 from ..schemas.watchlist import WatchlistCreate
-# Corrected Imports End Here
 from ..utils.scraper_queue import enqueue_scrape, enqueue_scam_check
+from typing import Literal # Import Literal
+
+RangeOption = Literal["1h", "6h", "24h", "7d", "30d", "90d", "1y", "all"]
 
 router = APIRouter()
 
@@ -29,7 +30,6 @@ async def add_product_from_extension(product_data: ProductDataFromExtension, db:
         existing_scam_score = db.query(ScamScore).filter(ScamScore.domain == domain).first()
         if not existing_scam_score:
             enqueue_scam_check(domain)
-            print(f"Enqueued scam check job for new domain: {domain}")
     except Exception as e:
         print(f"Failed to enqueue scam check job for {domain}: {e}")
     
@@ -37,12 +37,19 @@ async def add_product_from_extension(product_data: ProductDataFromExtension, db:
     if not source:
         source = Source(domain=domain, site_name=domain.split('.')[0].title())
         db.add(source)
-        try:
-            db.commit()
-            db.refresh(source)
-        except Exception as e:
-            db.rollback()
-            raise HTTPException(status_code=500, detail="Database error while creating source.")
+        db.commit()
+        db.refresh(source)
+
+    # --- UPDATED: Create Seller during product add ---
+    marketplace_name = domain.split('.')[0].title()
+    seller = crud_products.get_or_create_seller(
+        db,
+        marketplace=marketplace_name,
+        seller_name=product_data.brand or "Unknown", # Use brand as fallback
+        seller_rating=None,
+        review_count=None
+    )
+    # --- END UPDATE ---
 
     new_product = Product(
         title=product_data.title,
@@ -51,29 +58,18 @@ async def add_product_from_extension(product_data: ProductDataFromExtension, db:
         image_url=product_data.imageUrl
     )
     db.add(new_product)
-    try:
-        db.commit()
-        db.refresh(new_product)
-    except Exception as e:
-        db.rollback()
-        print(f"Error creating product: {e}")
-        raise HTTPException(status_code=500, detail="Database error while creating product.")
+    db.commit()
+    db.refresh(new_product)
 
     product_source = ProductSource(
         product_id=new_product.id,
         source_id=source.id,
+        seller_id=seller.id if seller else None, # Link seller
         url=product_data.url
     )
     db.add(product_source)
-    try:
-        db.commit()
-        db.refresh(product_source)
-    except Exception as e:
-        db.rollback()
-        db.delete(new_product)
-        db.commit()
-        print(f"Error creating product source, rolled back product: {e}")
-        raise HTTPException(status_code=500, detail="Database error while linking product source.")
+    db.commit()
+    db.refresh(product_source)
 
     price_log = PriceLog(
         product_source_id=product_source.id,
@@ -82,16 +78,8 @@ async def add_product_from_extension(product_data: ProductDataFromExtension, db:
         in_stock=True
     )
     db.add(price_log)
-    try:
-        db.commit()
-        db.refresh(new_product)
-    except Exception as e:
-         db.rollback()
-         db.delete(product_source)
-         db.delete(new_product)
-         db.commit()
-         print(f"Error creating price log, rolled back all: {e}")
-         raise HTTPException(status_code=500, detail="Database error while saving initial price.")
+    db.commit()
+    db.refresh(new_product)
 
     product_dict = {column.name: getattr(new_product, column.name) for column in new_product.__table__.columns}
     return {**product_dict, "newly_created": True}
@@ -99,7 +87,7 @@ async def add_product_from_extension(product_data: ProductDataFromExtension, db:
 
 @router.post("/track", response_model=ProductResponse)
 async def track_product(product: ProductCreate, db: Session = Depends(get_db)):
-    # ... (this endpoint remains the same)
+    # ... (this endpoint remains mostly the same)
     existing_product_source = db.query(ProductSource).filter(ProductSource.url == product.url).first()
     if existing_product_source:
         print(f"URL already tracked: {product.url}")
@@ -113,7 +101,6 @@ async def track_product(product: ProductCreate, db: Session = Depends(get_db)):
         existing_scam_score = db.query(ScamScore).filter(ScamScore.domain == domain).first()
         if not existing_scam_score:
             enqueue_scam_check(domain)
-            print(f"Enqueued scam check job for new domain: {domain}")
     except Exception as e:
         print(f"Failed to enqueue scam check job for {domain}: {e}")
 
@@ -125,16 +112,28 @@ async def track_product(product: ProductCreate, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(source)
 
+    # --- UPDATED: Create a default Seller on track ---
+    marketplace_name = domain.split('.')[0].title()
+    seller = crud_products.get_or_create_seller(
+        db,
+        marketplace=marketplace_name,
+        seller_name=product.brand or "Unknown", # Use brand as fallback
+        seller_rating=None,
+        review_count=None
+    )
+    # --- END UPDATE ---
+
     product_source = ProductSource(
         product_id=db_product.id,
         source_id=source.id,
+        seller_id=seller.id if seller else None, # Link seller
         url=product.url
     )
     db.add(product_source)
     db.commit()
 
     try:
-        enqueue_scrape(product.url, db_product.id, source.id)
+        enqueue_scrape(product.url, db_product.id, product_source.id) # Pass product_source.id
         print(f"Enqueued scrape job for: {product.url}")
     except Exception as e:
         print(f"Failed to enqueue scrape job for {product.url}: {e}")
@@ -142,12 +141,9 @@ async def track_product(product: ProductCreate, db: Session = Depends(get_db)):
     return db_product
 
 
-# --- NEW EXPORT ENDPOINT (Must be before '/{product_id}') ---
 @router.get("/export", response_model=List[ProductWithHistorySchema])
 async def export_all_data(db: Session = Depends(get_db)):
-    """
-    Export all products and their full price histories in a single JSON.
-    """
+    # ... (this endpoint remains the same)
     try:
         all_products = crud_products.get_products(db, skip=0, limit=10000)
         export_data = []
@@ -155,15 +151,19 @@ async def export_all_data(db: Session = Depends(get_db)):
         for product in all_products:
             product_dict = {column.name: getattr(product, column.name) for column in product.__table__.columns}
             
-            history_logs = crud_prices.get_price_history(db, product.id, days=9999)
+            # --- UPDATED: Use new history function ---
+            history_data = crud_prices.get_flexible_price_history(db, product.id, range_option="all")
+            
+            # Format data to match the old schema for export
             history_list = [
                 {
-                    "date": log.scraped_at,
-                    "price": log.price_cents / 100,
-                    "source": log.product_source.source.site_name if log.product_source and log.product_source.source else "Unknown"
+                    "date": item["date"],
+                    "price": item["price"],
+                    "source": item["source"]
                 }
-                for log in history_logs
+                for item in history_data
             ]
+            # --- END UPDATE ---
             
             product_with_history = {**product_dict, "price_history": history_list}
             export_data.append(product_with_history)
@@ -177,7 +177,8 @@ async def export_all_data(db: Session = Depends(get_db)):
 
 @router.get("/{product_id}", response_model=ProductDetail)
 async def get_product(product_id: int, db: Session = Depends(get_db)):
-    # ... (this endpoint remains the same)
+    # This endpoint is now correct because crud_products.get_product_with_prices
+    # was already updated to read from the 'sellers' table.
     result = crud_products.get_product_with_prices(db, product_id)
     if not result:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -203,18 +204,28 @@ async def list_products(skip: int = 0, limit: int = 100, db: Session = Depends(g
     return products
 
 
-@router.get("/{product_id}/history")
-async def get_price_history(product_id: int, days: int = 30, db: Session = Depends(get_db)):
-    # ... (this endpoint remains the same)
-    history = crud_prices.get_price_history(db, product_id, days)
+# --- THIS IS THE UPDATED ENDPOINT ---
+@router.get("/{product_id}/history", response_model=List[PriceHistory])
+async def get_price_history(
+    product_id: int, 
+    range: RangeOption = Query("30d", description="Time range for history (e.g., 7d, 1y, all)"),
+    db: Session = Depends(get_db)
+):
+    """
+    Get price history for a product, aggregated based on the time range.
+    """
+    history_data = crud_prices.get_flexible_price_history(db, product_id, range_option=range)
+    
+    # Convert data to PriceHistory schema
     return [
-        {
-            "date": log.scraped_at,
-            "price": log.price_cents / 100,
-            "source": log.product_source.source.site_name if log.product_source and log.product_source.source else "Unknown"
-        }
-        for log in history
+        PriceHistory(
+            date=item["date"],
+            price=item["price"],
+            source=item["source"]
+        )
+        for item in history_data
     ]
+# --- END UPDATED ENDPOINT ---
 
 
 @router.delete("/all", status_code=status.HTTP_200_OK)

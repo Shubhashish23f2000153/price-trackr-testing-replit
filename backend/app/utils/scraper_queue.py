@@ -7,6 +7,7 @@ scraper_queue = Queue("scraping", connection=redis_conn)
 scam_queue = Queue("scam_checks", connection=redis_conn)
 alert_queue = Queue("alerts", connection=redis_conn) # <-- ADD THIS
 sales_queue = Queue("sales_discovery", connection=redis_conn) # <-- ADD THIS
+aggregate_queue = Queue("aggregation", connection=redis_conn) # <-- ADD THIS
 
 def enqueue_scrape(url: str, product_id: int, source_id: int):
     """Enqueue a scraping job"""
@@ -43,6 +44,14 @@ def enqueue_sales_discovery():
     job = sales_queue.enqueue(
         'playwright_scraper.runner.run_sales_discovery_job',
         job_timeout='15m'
+    )
+    return job.id
+
+def enqueue_aggregation():
+    """Enqueue a job to run price data aggregation."""
+    job = aggregate_queue.enqueue(
+        'playwright_scraper.runner.run_aggregation_job',
+        job_timeout='30m' # Give it time
     )
     return job.id
 # --- END NEW FUNCTION ---

@@ -1,3 +1,4 @@
+// frontend/src/services/api.ts
 import axios from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
@@ -46,6 +47,8 @@ export interface Product {
   updated_at?: string;
 }
 
+// --- THIS IS THE UPDATED INTERFACE ---
+// It now correctly reflects the normalized schema
 export interface PriceInfo {
   source_name: string;
   current_price: number;
@@ -55,9 +58,10 @@ export interface PriceInfo {
   url: string;
   seller_name?: string | null;
   seller_rating?: string | null;
-  seller_review_count?: string | null;
-  avg_review_sentiment?: number | null; // Added Optional number field
+  seller_review_count?: string | null; // This now comes from the 'seller' table
+  avg_review_sentiment?: number | null;
 }
+// --- END UPDATED INTERFACE ---
 
 export interface ProductDetail extends Product {
   prices: PriceInfo[];
@@ -141,10 +145,13 @@ export const getProduct = async (productId: number): Promise<ProductDetail> => {
   return response.data;
 };
 
-export const getPriceHistory = async (productId: number, days = 30): Promise<PriceHistoryItem[]> => {
-  const response = await api.get(`/products/${productId}/history`, { params: { days } });
+// --- THIS IS THE MODIFIED FUNCTION ---
+export const getPriceHistory = async (productId: number, range = "30d"): Promise<PriceHistoryItem[]> => {
+  // It now takes a 'range' string instead of 'days'
+  const response = await api.get(`/products/${productId}/history`, { params: { range } });
   return response.data;
 };
+// --- END MODIFIED FUNCTION ---
 
 export const trackProduct = async (url: string) => {
   const response = await api.post('/products/track', { url, title: 'Loading...' });
