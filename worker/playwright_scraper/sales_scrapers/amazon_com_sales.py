@@ -3,14 +3,14 @@ from bs4 import BeautifulSoup
 import re
 from typing import List, Dict, Any
 from .base_sales_scraper import BaseSalesScraper
-from ..sales_helpers import extract_dates, get_platform_from_title, post_sale_to_api
+from ..sales_helpers import extract_dates, post_sale_to_api, get_platform_from_title
 
-class AmazonSalesScraper(BaseSalesScraper):
-    """Scrapes Amazon.in's main 'Today's Deals' page for sales."""
+class AmazonComSalesScraper(BaseSalesScraper):
+    """Scrapes Amazon.com's main 'Today's Deals' page for sales."""
     
     def __init__(self, user_agent: str):
         super().__init__(user_agent)
-        self.url = "https://www.amazon.in/deals"
+        self.url = "https://www.amazon.com/deals" # <-- US Deals URL
 
     def scrape(self) -> List[Dict[str, Any]]:
         print(f"Scraping HTML Page: {self.url}")
@@ -20,7 +20,8 @@ class AmazonSalesScraper(BaseSalesScraper):
         try:
             with sync_playwright() as p:
                 browser = p.chromium.launch(headless=True)
-                context = browser.new_context(user_agent=self.user_agent)
+                # Set locale to en-US
+                context = browser.new_context(user_agent=self.user_agent, locale="en-US")
                 page = context.new_page()
                 
                 print(f"  -> Navigating to {self.url}")
@@ -38,10 +39,9 @@ class AmazonSalesScraper(BaseSalesScraper):
             soup = BeautifulSoup(html_content, "lxml")
             
             # Find all deal "widgets" or "cards"
-            # Selectors based on Amazon's typical deals page structure
             deal_cards = soup.select('div[class*="DealGridItem"]')
             
-            print(f"  -> Found {len(deal_cards)} potential Amazon deal cards.")
+            print(f"  -> Found {len(deal_cards)} potential Amazon.com deal cards.")
 
             for card in deal_cards:
                 title_element = card.select_one('div[class*="DealTitle"]')
@@ -50,7 +50,6 @@ class AmazonSalesScraper(BaseSalesScraper):
                 if not title:
                     continue # Skip if there's no title
 
-                # Try to find discount percentage
                 discount = None
                 discount_element = card.select_one('div[class*="DealPrice"]')
                 if discount_element:
@@ -63,15 +62,14 @@ class AmazonSalesScraper(BaseSalesScraper):
                         except: 
                             pass
 
-                # Dates are rarely listed on these cards, so we leave them None
-                start_date, end_date = None, None
+                start_date, end_date = None, None # Dates are rare on these cards
 
                 sale = {
                     "title": title,
-                    "description": f"Deal on {title}", # Amazon rarely provides descriptions here
+                    "description": f"Deal on {title}",
                     "discount_percentage": discount,
-                    "source_domain": "amazon.in",
-                    "region": "IN",
+                    "source_domain": "amazon.com",
+                    "region": "US", # US Scraper
                     "start_date": start_date,
                     "end_date": end_date,
                     "is_active": True

@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 import re
 from typing import List, Dict, Any
 from .base_sales_scraper import BaseSalesScraper
-from ..sales_discovery import extract_dates, get_platform_from_title
+from ..sales_helpers import extract_dates, get_platform_from_title, post_sale_to_api
 
 class GadgetGuyAUSalesScraper(BaseSalesScraper):
     """Scrapes GadgetGuy.com.au's 'Reviews' section for sales."""

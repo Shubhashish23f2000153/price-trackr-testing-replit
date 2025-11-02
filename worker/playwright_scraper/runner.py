@@ -15,6 +15,7 @@ from playwright_scraper.sales_discovery import discover_all_sales
 from pywebpush import webpush, WebPushException
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from playwright_scraper.scrapers import get_scraper
+import traceback # <--- 1. IMPORT TRACEBACK
 
 # --- FIX: Import from aggregation.py ---
 from .aggregation import run_aggregation_jobs
@@ -216,7 +217,6 @@ def scrape_and_save_product(url: str, product_id: int, source_id: int):
         return data # Return original scraped data
     
     except Exception as e:
-        import traceback
         print(f"[Worker] ❌ CRITICAL ERROR scraping {url}: {e}\n{traceback.format_exc()}")
         return None
 
@@ -280,7 +280,6 @@ def compute_scam_score(domain: str):
                  print(f"[Worker] ✅ Success. Saved new score for {domain}: {score}")
             db.commit()
         except Exception as e:
-            import traceback
             print(f"[Worker] ❌ CRITICAL ERROR checking WHOIS for {domain}: {e}\n{traceback.format_exc()}")
             # Rollback any failed transaction
             db.rollback()
@@ -375,7 +374,7 @@ def check_price_alerts():
     return triggered_alerts
 
 
-# --- 7. Sales Discovery Task (remains the same) ---
+# --- 7. Sales Discovery Task (UPDATED) ---
 def run_sales_discovery_job():
     """Worker task to discover and add new sales."""
     print("[Worker] Running sales discovery job...")
@@ -383,7 +382,9 @@ def run_sales_discovery_job():
         discover_all_sales()
         print("[Worker] ✅ Sales discovery job complete.")
     except Exception as e:
-        print(f"[Worker] ❌ CRITICAL ERROR in sales discovery: {e}")
+        # --- 2. THIS WILL NOW PRINT THE FULL ERROR ---
+        print(f"[Worker] ❌ CRITICAL ERROR in sales discovery: {e}\n{traceback.format_exc()}")
+# --- END UPDATE ---
 
 # --- 8. Aggregation Task ---
 def run_aggregation_job():
@@ -394,7 +395,6 @@ def run_aggregation_job():
         run_aggregation_jobs()
         print("[Worker] ✅ Price aggregation job complete.")
     except Exception as e:
-        import traceback
         print(f"[Worker] ❌ CRITICAL ERROR in price aggregation: {e}\n{traceback.format_exc()}")
 
 

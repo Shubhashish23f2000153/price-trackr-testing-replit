@@ -8,6 +8,7 @@ from .flipkart_sales import FlipkartSalesScraper
 # --- US Scrapers ---
 from .amazon_com_sales import AmazonComSalesScraper
 from .cnet_sales import CnetSalesScraper
+from .bestbuy_sales import BestBuySalesScraper
 
 # --- GB Scrapers ---
 from .techradar_sales import TechRadarSalesScraper
@@ -38,6 +39,7 @@ __all__ = [
     # US
     "AmazonComSalesScraper",
     "CnetSalesScraper",
+    "BestBuySalesScraper",
     # GB
     "TechRadarSalesScraper",
     # AU
