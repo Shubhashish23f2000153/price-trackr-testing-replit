@@ -1,0 +1,56 @@
+# This file exports all individual sales scrapers
+
+# --- IN Scrapers ---
+from .mysmartprice_sales import MySmartPriceSalesScraper
+from .amazon_sales import AmazonSalesScraper
+from .flipkart_sales import FlipkartSalesScraper
+
+# --- US Scrapers ---
+from .amazon_com_sales import AmazonComSalesScraper
+from .cnet_sales import CnetSalesScraper
+
+# --- GB Scrapers ---
+from .techradar_sales import TechRadarSalesScraper
+
+# --- AU Scrapers ---
+from .finder_au_sales import FinderAUSalesScraper
+from .gadgetguy_au_sales import GadgetGuyAUSalesScraper
+
+# --- EU Scrapers ---
+from .lesnumeriques_sales import LesNumeriquesSalesScraper
+from .heise_sales import HeiseSalesScraper
+from .chip_de_sales import ChipDESalesScraper
+
+# --- JP Scrapers ---
+from .ascii_jp_sales import AsciiJPSalesScraper
+from .impress_watch_sales import ImpressWatchSalesScraper
+
+# --- CN Scrapers ---
+from .ithome_sales import ITHomeSalesScraper
+from .kuaikeji_sales import KuaiKeJiSalesScraper
+
+
+__all__ = [
+    # IN
+    "MySmartPriceSalesScraper",
+    "AmazonSalesScraper",
+    "FlipkartSalesScraper",
+    # US
+    "AmazonComSalesScraper",
+    "CnetSalesScraper",
+    # GB
+    "TechRadarSalesScraper",
+    # AU
+    "FinderAUSalesScraper",
+    "GadgetGuyAUSalesScraper",
+    # EU
+    "LesNumeriquesSalesScraper",
+    "HeiseSalesScraper",
+    "ChipDESalesScraper",
+    # JP
+    "AsciiJPSalesScraper",
+    "ImpressWatchSalesScraper",
+    # CN
+    "ITHomeSalesScraper",
+    "KuaiKeJiSalesScraper"
+]

@@ -1,0 +1,44 @@
+from playwright.sync_api import Page
+from bs4 import BeautifulSoup
+from ..base_scraper import BaseScraper
+from typing import Dict, List
+import re
+import json
+
+class BestBuyCAScraper(BaseScraper):
+    def extract_data(self, page: Page) -> Dict:
+        """Extract data using Playwright for BestBuy.ca"""
+        
+        # --- Set locale to en-CA ---
+        try:
+            page.context.set_extra_http_headers({"Accept-Language": "en-CA"})
+        except Exception as e:
+            print(f"[BestBuyCA Scraper] Could not set locale: {e}")
+
+        # --- Wait for core elements ---
+        try:
+            # .ca uses a different class for title
+            page.wait_for_selector('h1[class*="productName_"]', timeout=10000)
+            page.wait_for_selector('span[data-testid="price-current-value"]', timeout=10000) # Price
+        except Exception as e:
+            print(f"[BestBuyCA Scraper] Timed out waiting for core elements: {e}")
+        # --- End Wait ---
+
+        title = "Unknown Product"
+        try:
+            title_elem = page.locator('h1[class*="productName_"]').first
+            title = title_elem.inner_text().strip()
+        except Exception as e:
+            print(f"[BestBuyCA Scraper] Could not find title: {e}")
+
+        price_text = ""
+        try:
+            # .ca price is usually a single element
+            price_elem = page.locator('span[data-testid="price-current-value"]').first
+            price_text = price_elem.inner_text().strip()
+        except Exception as e:
+            print(f"[BestBuyCA Scraper] Could not find price: {e}")
+
+        image_url = ""
+        try:
+            # .ca uses

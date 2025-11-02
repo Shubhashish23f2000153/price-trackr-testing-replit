@@ -6,23 +6,23 @@ from urllib.parse import urlparse
 import json
 from datetime import datetime, timezone, timedelta
 import re
-# --- 1. IMPORT PLAYWRIGHT ---
-from playwright.sync_api import sync_playwright
+# --- 1. Import our new modular scrapers ---
+from .sales_scrapers import MySmartPriceSalesScraper
 
 # --- Configuration ---
 SALES_API_URL = "http://backend:8000/api/sales/"
 CURATED_SOURCES = {
     "IN": [
-        {"url": "https://www.digit.in/rss/deals.xml", "type": "rss"}, # Better tech deals feed
-        {"url": "https://www.gadgets360.com/rss/deals", "type": "rss"}, # Use the dedicated deals feed
-        {"url": "https://www.91mobiles.com/rss/news.xml", "type": "rss"}, # Use the .xml feed
-        {"url": "https://www.mysmartprice.com/deals/", "type": "scrape"},
+        {"url": "https://www.digit.in/rss/deals.xml", "type": "rss"},
+        {"url": "https://www.gadgets360.com/rss/deals", "type": "rss"},
+        {"url": "https://www.91mobiles.com/rss/news.xml", "type": "rss"},
         {"url": "https://timesofindia.indiatimes.com/rssfeeds/58867912.cms", "type": "rss"},
+        # --- 2. Define modular scrapers to run ---
+        {"scraper": MySmartPriceSalesScraper, "type": "scrape"},
     ]
 }
 PROCESSED_SALES_CACHE = set()
 
-# --- 2. USE THE SAME USER AGENT AS OUR OTHER SCRAPERS ---
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36"
 REQUEST_HEADERS = {
     'User-Agent': USER_AGENT,
@@ -40,7 +40,6 @@ def extract_dates(text):
     start_date, end_date = None, None
     if not text: return start_date, end_date
     try:
-        # Improved regex to find date ranges
         range_match = re.search(r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*(\d{1,2})\s*to\s*(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*(\d{1,2})', text, re.IGNORECASE)
         if range_match:
             start_str = f"{range_match.group(1)} {range_match.group(2)}"
@@ -52,9 +51,7 @@ def extract_dates(text):
         date_matches = dateparser.search.search_dates(text, languages=['en'])
         if date_matches:
             date_matches.sort(key=lambda x: text.find(x[0]))
-            
             now = datetime.now(timezone.utc)
-            
             valid_dates = [d[1].replace(tzinfo=timezone.utc) if d[1].tzinfo is None else d[1] for d in date_matches if (d[1].replace(tzinfo=timezone.utc) if d[1].tzinfo is None else d[1]) > (now - timedelta(days=60))]
 
             if valid_dates:
@@ -63,7 +60,6 @@ def extract_dates(text):
                     potential_end = max(valid_dates)
                     if potential_end > start_date:
                         end_date = potential_end
-
                 start_date = start_date.isoformat() if start_date else None
                 end_date = end_date.isoformat() if end_date else None
                 
@@ -138,11 +134,9 @@ def post_sale_to_api(sale_data: dict):
 def scrape_from_rss(feed_url, region):
     print(f"Scraping RSS Feed: {feed_url}")
     try:
-        # Use the good user agent for RSS too
         feed_data = feedparser.parse(feed_url, agent=REQUEST_HEADERS.get('User-Agent'))
 
         if feed_data.bozo:
-             # These errors are from the source, not us.
              print(f"  -> Warning: Feed parsing issue for {feed_url}. Error: {feed_data.bozo_exception}")
 
         print(f"  -> Found {len(feed_data.entries)} entries.")
@@ -175,96 +169,10 @@ def scrape_from_rss(feed_url, region):
     except Exception as e:
         print(f"  -> Error scraping RSS feed {feed_url}: {e}")
 
-# --- 3. THIS FUNCTION IS NOW REWRITTEN ---
-def scrape_from_html(page_url, region):
-    """Scrapes MySmartPrice Deals page using Playwright."""
-    print(f"Scraping HTML Page: {page_url}")
-    if "mysmartprice.com" not in page_url:
-        print(f"  -> Skipping HTML scrape for non-MySmartPrice URL: {page_url}")
-        return
-    
-    html_content = ""
-    try:
-        # Use Playwright to launch a real browser
-        with sync_playwright() as p:
-            print(f"  -> Launching Playwright browser...")
-            browser = p.chromium.launch(headless=True)
-            context = browser.new_context(user_agent=USER_AGENT)
-            page = context.new_page()
-            
-            # Go to the page
-            page.goto(page_url, wait_until='domcontentloaded', timeout=60000)
-            
-            # --- ADD A SMALL WAIT/SCROLL to trigger lazy-loading ---
-            page.wait_for_timeout(2000) # Wait 2 seconds for content
-            page.evaluate("window.scrollBy(0, 1000)")
-            page.wait_for_timeout(1000)
-            # --- END WAIT/SCROLL ---
+# --- 3. This function is now GONE ---
+# def scrape_from_html(page_url, region):
+#    ... (All this logic is now in mysmartprice_sales.py) ...
 
-            # Get the HTML content
-            html_content = page.content()
-            browser.close()
-            print(f"  -> Successfully fetched page with Playwright.")
-
-        # Now, parse the content with BeautifulSoup
-        soup = BeautifulSoup(html_content, "lxml")
-        
-        # --- START MODIFICATION (Updated Selectors) ---
-        # These selectors are based on the site's current (hypothetical) layout
-        deal_cards = soup.select('div.deals-card-item') # Updated main card selector
-        if not deal_cards:
-             # Try old selector as a fallback
-             deal_cards = soup.select('div[class^="msps-deals-card__"]')
-        
-        print(f"  -> Found {len(deal_cards)} potential MySmartPrice deal cards.")
-
-        for card in deal_cards:
-            # Updated title selector
-            title_element = card.select_one('a.deals-card-item__title')
-            # Updated description selector
-            description_element = card.select_one('div.deals-card-item__offer, .msps-deals-card__offertxt')
-            # Updated store logo selector
-            store_element = card.select_one('img.deals-card-item__store-logo, .msps-deals-card__store > img') 
-            # --- END MODIFICATION ---
-
-            title = title_element.get_text(strip=True) if title_element else "Unknown Sale"
-            description = description_element.get_text(strip=True) if description_element else ""
-            
-            platform_name = ""
-            if store_element and store_element.get('alt'):
-                 platform_name = store_element['alt'].lower().replace(" logo","").strip()
-                 if platform_name in ["amazon", "flipkart", "myntra", "meesho", "snapdeal"]:
-                     platform_name += ".in" # Make it a valid domain
-                 else:
-                     platform_name += ".com" # Default
-            
-            if not platform_name or "unknown" in platform_name:
-                 platform_name = get_platform_from_title(title) or "unknown.com"
-
-            card_text = title + " " + description
-            start_date, end_date = extract_dates(card_text)
-
-            discount = None
-            if description:
-                 match = re.search(r'(\d+)% off', description, re.IGNORECASE)
-                 if match:
-                     try: discount = float(match.group(1))
-                     except: pass
-
-            sale = {
-                "title": title,
-                "description": description,
-                "discount_percentage": discount,
-                "source_domain": platform_name,
-                "region": region,
-                "start_date": start_date,
-                "end_date": end_date,
-                "is_active": True
-            }
-            post_sale_to_api(sale)
-            
-    except Exception as e:
-        print(f"  -> Error scraping HTML page {page_url} with Playwright: {e}")
 
 # --- Main Discovery Function ---
 def discover_all_sales():
@@ -275,10 +183,19 @@ def discover_all_sales():
         for source in sources:
             if source["type"] == "rss":
                 scrape_from_rss(source["url"], region)
+            # --- 4. This is the new logic ---
             elif source["type"] == "scrape":
-                scrape_from_html(source["url"], region)
+                try:
+                    scraper_class = source["scraper"]
+                    scraper_instance = scraper_class(user_agent=USER_AGENT)
+                    sales_list = scraper_instance.scrape()
+                    print(f"  -> Modular scraper {scraper_class.__name__} found {len(sales_list)} sales.")
+                    for sale in sales_list:
+                        post_sale_to_api(sale)
+                except Exception as e:
+                    print(f"  -> Error running modular scraper {source.get('scraper')}: {e}")
             else:
-                print(f"  -> Unknown source type: {source['type']} for {source['url']}")
+                print(f"  -> Unknown source type: {source['type']} for {source.get('url')}")
     print(f"--- Finished Sales Discovery Task. Processed {len(PROCESSED_SALES_CACHE)} unique sales this run. ---")
 
 # --- Direct execution for testing ---
