@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { Sun, Bell, Shield, Download, Trash2, AlertTriangle, MapPin, UserX } from 'lucide-react';
 import { 
   getSpaceStats, 
-  deleteAllProducts, 
+  deleteAllProducts,
+  deleteAllSales,
   deleteUser,  
   exportAllData, 
   ProductWithHistory,
@@ -205,8 +206,7 @@ export default function Settings({ darkMode, setDarkMode }: SettingsProps) {
     }
   };
   // --- END Subscription Logic ---
-
-
+  
   const handleClearAll = async () => {
      if (window.confirm("DANGER ZONE:\nAre you absolutely sure you want to delete ALL tracked products?\nThis action cannot be undone.")) {
       try {
@@ -222,6 +222,19 @@ export default function Settings({ darkMode, setDarkMode }: SettingsProps) {
     }
    };
 
+   const handleClearAllSales = async () => {
+    if (window.confirm("DANGER ZONE:\nAre you absolutely sure you want to delete ALL tracked sales?\nThis action cannot be undone.")) {
+     try {
+       const result = await deleteAllSales();
+       alert(result.message);
+       // We don't need to refresh stats, just navigate
+       navigate('/sales');
+     } catch (error) {
+       console.error("Failed to delete all sales:", error);
+       alert("Failed to delete all sales. Please try again.");
+     }
+   }
+  };
 
    const handleDeleteAccount = async () => {
     if (!user) {
@@ -412,6 +425,13 @@ export default function Settings({ darkMode, setDarkMode }: SettingsProps) {
           <Trash2 className="w-4 h-4" />
           <span>Delete All Tracked Products</span>
         </button>
+        <button
+            onClick={handleClearAllSales}
+            className="btn-secondary text-sm bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40 w-full flex items-center justify-center space-x-2"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span>Delete All Sales Data</span>
+          </button>
       </div>
     </div>
   );

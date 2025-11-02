@@ -216,6 +216,11 @@ export const getSales = async (region?: string, status?: 'ongoing' | 'upcoming')
   return response.data;
 };
 
+export const deleteAllSales = async () => {
+  const response = await api.delete('/sales/all');
+  return response.data;
+};
+
 export const deleteAllProducts = async () => {
   const response = await api.delete('/products/all');
   return response.data;

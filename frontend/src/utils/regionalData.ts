@@ -2,10 +2,9 @@ export const countries = [
   { value: 'IN', label: 'India (INR)', currency: '₹' },
   { value: 'US', label: 'United States (USD)', currency: '$' },
   { value: 'GB', label: 'United Kingdom (GBP)', currency: '£' },
-  { value: 'EU', label: 'European Union (EUR)', currency: '€' },
   { value: 'CA', label: 'Canada (CAD)', currency: '$' },
-  { value: 'AU', label: 'Australia (AUD)', currency: '$' },
   { value: 'JP', label: 'Japan (JPY)', currency: '¥' },
+  { value: 'CN', label: 'China (CNY)', currency: '¥' },
   // Add more countries as needed
 ];
 

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, timezone
@@ -41,3 +41,13 @@ async def create_sale(sale: SaleCreate, db: Session = Depends(get_db)):
     """Create a new sale entry"""
     db_sale = crud_sales.create_sale(db, sale)
     return db_sale
+
+@router.delete("/all", status_code=status.HTTP_200_OK)
+async def delete_all_tracked_sales(db: Session = Depends(get_db)):
+    """Deletes all sales from the database."""
+    try:
+        deleted_count = crud_sales.delete_all_sales(db)
+        return {"message": f"Successfully deleted {deleted_count} sales."}
+    except Exception as e:
+        print(f"Error deleting all sales: {e}")
+        raise HTTPException(status_code=500, detail="Could not delete all sales.")

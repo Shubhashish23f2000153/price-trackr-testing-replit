@@ -13,15 +13,6 @@ from .bestbuy_sales import BestBuySalesScraper
 # --- GB Scrapers ---
 from .techradar_sales import TechRadarSalesScraper
 
-# --- AU Scrapers ---
-from .finder_au_sales import FinderAUSalesScraper
-from .gadgetguy_au_sales import GadgetGuyAUSalesScraper
-
-# --- EU Scrapers ---
-from .lesnumeriques_sales import LesNumeriquesSalesScraper
-from .heise_sales import HeiseSalesScraper
-from .chip_de_sales import ChipDESalesScraper
-
 # --- JP Scrapers ---
 from .ascii_jp_sales import AsciiJPSalesScraper
 from .impress_watch_sales import ImpressWatchSalesScraper
@@ -42,13 +33,6 @@ __all__ = [
     "BestBuySalesScraper",
     # GB
     "TechRadarSalesScraper",
-    # AU
-    "FinderAUSalesScraper",
-    "GadgetGuyAUSalesScraper",
-    # EU
-    "LesNumeriquesSalesScraper",
-    "HeiseSalesScraper",
-    "ChipDESalesScraper",
     # JP
     "AsciiJPSalesScraper",
     "ImpressWatchSalesScraper",

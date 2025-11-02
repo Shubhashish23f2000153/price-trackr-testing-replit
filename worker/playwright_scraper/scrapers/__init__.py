@@ -19,15 +19,6 @@ from .amazon_uk import AmazonUKScraper
 from .amazon_ca import AmazonCAScraper
 from .bestbuy_ca import BestBuyCAScraper
 
-# AU Scrapers
-from .amazon_au import AmazonAUScraper
-from .jbhifi import JBHifiScraper
-
-# EU (DE) Scrapers
-from .amazon_de import AmazonDEScraper
-from .mediamarkt_de import MediaMarktDEScraper
-from .saturn_de import SaturnDEScraper
-
 # JP Scrapers
 from .rakuten import RakutenScraper
 from .yodobashi import YodobashiScraper
@@ -49,11 +40,6 @@ __all__ = [
     "AmazonUKScraper",
     "AmazonCAScraper",
     "BestBuyCAScraper",
-    "AmazonAUScraper",
-    "JBHifiScraper",
-    "AmazonDEScraper",
-    "MediaMarktDEScraper",
-    "SaturnDEScraper",
     "RakutenScraper",
     "YodobashiScraper",
     "JDScraper"
@@ -83,17 +69,7 @@ def get_scraper(url: str):
     # --- CA Sites ---
     elif "bestbuy.ca" in hostname:
         return BestBuyCAScraper(url)
-    
-    # --- AU Sites ---
-    elif "jbhifi.com.au" in hostname:
-        return JBHifiScraper(url)
-
-    # --- EU (DE) Sites ---
-    elif "mediamarkt.de" in hostname:
-        return MediaMarktDEScraper(url)
-    elif "saturn.de" in hostname:
-        return SaturnDEScraper(url)
-        
+           
     # --- JP Sites ---
     elif "rakuten.co.jp" in hostname:
         return RakutenScraper(url)
@@ -111,10 +87,6 @@ def get_scraper(url: str):
         return AmazonUKScraper(url)
     elif "amazon.ca" in hostname or "amzn.ca" in hostname:
         return AmazonCAScraper(url)
-    elif "amazon.com.au" in hostname or "amzn.com.au" in hostname:
-        return AmazonAUScraper(url)
-    elif "amazon.de" in hostname or "amzn.de" in hostname:
-        return AmazonDEScraper(url)
     elif "amazon.com" in hostname or "amzn.com" in hostname:
         return AmazonCOMScraper(url) # US is the fallback
         

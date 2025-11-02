@@ -4,6 +4,7 @@ from urllib.parse import urlparse
 import traceback
 import requests
 from datetime import datetime, timezone, timedelta
+import os
 
 # --- 1. Import ALL modular scrapers ---
 from .sales_scrapers import (
@@ -17,13 +18,6 @@ from .sales_scrapers import (
     BestBuySalesScraper, 
     # GB
     TechRadarSalesScraper,
-    # AU
-    FinderAUSalesScraper,
-    GadgetGuyAUSalesScraper,
-    # EU
-    LesNumeriquesSalesScraper,
-    HeiseSalesScraper,
-    ChipDESalesScraper,
     # JP
     AsciiJPSalesScraper,
     ImpressWatchSalesScraper,
@@ -67,15 +61,7 @@ CURATED_SOURCES = {
     "GB": [
         {"scraper": TechRadarSalesScraper, "type": "scrape"},
     ],
-    "AU": [
-        {"scraper": FinderAUSalesScraper, "type": "scrape"},
-        {"scraper": GadgetGuyAUSalesScraper, "type": "scrape"},
-    ],
-    "EU": [
-        {"scraper": LesNumeriquesSalesScraper, "type": "scrape"},
-        {"scraper": HeiseSalesScraper, "type": "scrape"},
-        {"scraper": ChipDESalesScraper, "type": "scrape"},
-    ],
+
     "JP": [
         {"scraper": AsciiJPSalesScraper, "type": "scrape"},
         {"scraper": ImpressWatchSalesScraper, "type": "scrape"},
