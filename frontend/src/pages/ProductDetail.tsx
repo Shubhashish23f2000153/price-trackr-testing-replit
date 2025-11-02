@@ -13,9 +13,9 @@ import {
   PriceHistoryItem,
   Watchlist,
   ScamScore,
-  PriceInfo // <-- IMPORT PriceInfo
+  PriceInfo
 } from '../services/api';
-// --- Import Icons ---
+// --- Import Icons (Corrected: 'Info' removed) ---
 import { ArrowLeft, Tag, BarChart2, Heart, Trash2, AlertTriangle, Star, CheckCircle, HelpCircle } from 'lucide-react';
 // --- End Import ---
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -141,20 +141,13 @@ const findWatchlistItemId = (productId: number | undefined, watchlist: Watchlist
     return item ? item.id : null;
 };
 
-// --- FIX 1: Add "1h" and "6h" to the RangeOption type ---
+// --- FIX 1: Updated RangeOption type ---
+// We also add back the shorter ranges for live updates
 type RangeOption = "1h" | "6h" | "24h" | "7d" | "30d" | "90d" | "1y" | "all";
+// --- END FIX ---
 
-// --- UPDATED: historyRanges now includes "1h" and "6h" ---
-const historyRanges: { value: RangeOption; label: string }[] = [
-  { value: '1h', label: '1H' },
-  { value: '6h', label: '6H' },
-  { value: '24h', label: '24H' },
-  { value: '7d', label: '7D' },
-  { value: '30d', label: '30D' },
-  { value: '90d', label: '90D' },
-  { value: '1y', label: '1Y' },
-  { value: 'all', label: 'All' },
-];
+// --- FIX 2: Removed the unused 'historyRanges' constant ---
+// (The constant is now gone)
 // --- END FIX ---
 
 
@@ -174,7 +167,10 @@ export default function ProductDetail() {
   const [scamScore, setScamScore] = useState<ScamScore | null>(null);
   const [isScamScoreLoading, setIsScamScoreLoading] = useState(true);
   
-  const [historyRange, setHistoryRange] = useState<RangeOption>("30d");
+  // --- FIX 3: Updated default history range state ---
+  const [historyRange, setHistoryRange] = useState<RangeOption>("7d");
+  // --- END FIX ---
+  
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
 
   // Live update WebSocket Effect
@@ -225,7 +221,6 @@ export default function ProductDetail() {
       });
 
       // 2. UPDATE PRICE HISTORY (Only if viewing recent data)
-      // This check is now valid because RangeOption includes 1h and 6h
       if (historyRange === '1h' || historyRange === '6h' || historyRange === '24h' || historyRange === '7d' || historyRange === '30d') {
         const newHistoryItem: PriceHistoryItem = {
           date: new Date().toISOString(),
@@ -303,6 +298,7 @@ export default function ProductDetail() {
       setIsHistoryLoading(true);
       setHistory([]);
       try {
+        // We pass the new RangeOption type, which is valid
         const historyData = await getPriceHistory(numProductId, historyRange);
         
         const formattedHistory = historyData.map((h: PriceHistoryItem) => ({
@@ -445,7 +441,7 @@ export default function ProductDetail() {
           </div>
         </div>
 
-        {/* Right Column (Chart & Details) - (Unchanged) */}
+        {/* Right Column (Chart & Details) */}
         <div className="md:col-span-2 space-y-4">
           <div className="card">
             <h3 className="text-lg font-semibold mb-2">Price Overview</h3>
@@ -460,23 +456,26 @@ export default function ProductDetail() {
           <div className="card">
             <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4">
               <h3 className="text-lg font-semibold flex items-center"><BarChart2 className="w-5 h-5 mr-2" /> Price History</h3>
+              
+              {/* --- FIX 4: REPLACED BUTTONS WITH DROPDOWN --- */}
               <div className="flex-shrink-0">
-                <div className="flex items-center space-x-1 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg">
-                  {historyRanges.map((range) => (
-                    <button
-                      key={range.value}
-                      onClick={() => setHistoryRange(range.value)}
-                      className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
-                        historyRange === range.value
-                          ? 'bg-white dark:bg-gray-700 text-black dark:text-white shadow-sm'
-                          : 'text-gray-600 dark:text-gray-400 hover:bg-white/50 dark:hover:bg-gray-700/50'
-                      }`}
-                    >
-                      {range.label}
-                    </button>
-                  ))}
-                </div>
+                <label htmlFor="history-range" className="sr-only">Select Time Range</label>
+                <select
+                  id="history-range"
+                  value={historyRange}
+                  onChange={(e) => setHistoryRange(e.target.value as RangeOption)}
+                  className="input !py-2 !px-3 text-sm"
+                >
+                  <option value="7d">1 Week</option>
+                  <option value="30d">1 Month</option>
+                  <option value="90d">6 Months</option>
+                  <option value="1y">1 Year</option>
+                  <option value="all">All Time</option>
+                  
+                </select>
               </div>
+              {/* --- END FIX --- */}
+              
             </div>
             
             {isHistoryLoading ? (
@@ -484,12 +483,11 @@ export default function ProductDetail() {
             ) : history.length > 1 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <LineChart data={history} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb dark:stroke-gray-700" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" className="dark:stroke-gray-700" />
                   <XAxis 
                     dataKey="date" 
                     tickFormatter={(dateStr) => {
                       const date = new Date(dateStr);
-                      // This check is now valid
                       if (historyRange === '24h' || historyRange === '6h' || historyRange === '1h') {
                         return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                       }
@@ -525,7 +523,7 @@ export default function ProductDetail() {
         </div>
       </div>
 
-      {/* Danger Zone - FIX 2: Corrected closing tag */}
+      {/* Danger Zone - (Corrected closing tags) */}
       <div className="card border-red-500/30 dark:border-red-500/50 mt-8">
         <h3 className="text-lg font-semibold text-red-700 dark:text-red-400 flex items-center space-x-2">
           <AlertTriangle className="w-5 h-5" />
@@ -533,7 +531,7 @@ export default function ProductDetail() {
         </h3>
         <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 mb-4">
           Permanently stop tracking this item. This action cannot be undone.
-        </p> {/* <-- This was </section> */}
+        </p>
         <button
           onClick={handleDelete}
           className="btn-secondary text-sm bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40"

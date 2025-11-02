@@ -2,13 +2,24 @@ from playwright.sync_api import Page
 from bs4 import BeautifulSoup
 from ..base_scraper import BaseScraper
 from typing import Dict
-import re # Import regex
+import re
+import time
 
 class MeeshoScraper(BaseScraper):
     def extract_data(self, page: Page) -> Dict:
         """Extract data using Playwright"""
+        
+        # --- ADD A WAIT for the price to appear ---
+        try:
+            price_selector_to_wait = 'h4[class*="Price__PriceValue"], h4.sc-eDV5Ve, .NewProductCard__PriceRow-sc'
+            page.wait_for_selector(price_selector_to_wait, timeout=10000)
+        except Exception as e:
+            print(f"[Meesho Scraper] Timed out waiting for price element: {e}")
+            # Continue anyway, maybe it's there
+        # --- END WAIT ---
+
         title = ""
-        title_selectors = ['h1']
+        title_selectors = ['h1', 'span.NewProductCard__ProductTitle_pdp-sc']
         for selector in title_selectors:
             try:
                 title = page.locator(selector).first.inner_text(timeout=5000).strip()
@@ -17,7 +28,8 @@ class MeeshoScraper(BaseScraper):
         if not title: title = "Unknown Product"
 
         price_text = ""
-        price_selectors = ['h4', 'h4.sc-eDV5Ve', 'h4[class*="Price__PriceValue"]']
+        # --- ADDED MORE SELECTORS ---
+        price_selectors = ['h4[class*="Price__PriceValue"]', 'h4.sc-eDV5Ve', 'h4', '.NewProductCard__PriceRow-sc']
         for selector in price_selectors:
             try:
                 full_price_text = page.locator(selector).first.inner_text(timeout=5000).strip()
@@ -28,7 +40,7 @@ class MeeshoScraper(BaseScraper):
             except: continue
 
         image_url = ""
-        image_selectors = ['img.AviImage_ImageWrapper-sc-1055enk-0', 'div[class*="ProductDesktopImage"] img', 'picture img']
+        image_selectors = ['img.AviImage_ImageWrapper-sc-1055enk-0', 'div[class*="ProductDesktopImage"] img', 'picture img', 'img.NewProductCard__Image-sc']
         for selector in image_selectors:
             try:
                 img_element = page.locator(selector).first
@@ -39,7 +51,7 @@ class MeeshoScraper(BaseScraper):
             except: continue
 
         description = ""
-        description_selectors = ['div[class*="ProductDescription__DescriptionContainer"]', 'div.content']
+        description_selectors = ['div[class*="ProductDescription__DescriptionContainer"]', 'div.content', 'div.ProductDescription-sc']
         for selector in description_selectors:
             try:
                 desc_element = page.locator(selector).first
@@ -47,29 +59,22 @@ class MeeshoScraper(BaseScraper):
                 if description: break
             except: continue
 
-        # --- NEW: Seller Info Extraction ---
         seller_name = None
         seller_rating = None
         seller_review_count = None
         try:
-            # Meesho seller name is often in a specific div structure
-            seller_elem = page.locator('div[class*="ShopDetails"] p[class*="ShopName"]').first
+            seller_elem = page.locator('div[class*="ShopDetails"] p[class*="ShopName"], .ProductSellerInformation__Name-sc').first
             if seller_elem:
                 seller_name = seller_elem.inner_text().strip()
 
-            # Rating seems to be nearby, potentially sibling or parent structure
-            rating_elem = page.locator('div[class*="ShopDetails"] span[class*="Rating"]').first # Look for span with Rating in class
+            rating_elem = page.locator('div[class*="ShopDetails"] span[class*="Rating"], .ProductSellerInformation__Rating-sc').first
             if rating_elem:
-                 # Rating format might be "4.1 ★"
                  rating_text = rating_elem.inner_text().strip()
-                 rating_match = re.search(r'([\d\.]+)', rating_text) # Extract number part
+                 rating_match = re.search(r'([\d\.]+)', rating_text)
                  if rating_match:
                      seller_rating = f"{rating_match.group(1)} Stars"
-
-            # Review count might be harder, maybe in product reviews section, skip for now
         except Exception as e:
             print(f"[Meesho Scraper] Could not extract seller details: {e}")
-        # --- End of Seller Info Extraction ---
 
         return {
             "title": title,
@@ -80,9 +85,9 @@ class MeeshoScraper(BaseScraper):
             "url": self.url,
             "image_url": image_url,
             "description": description,
-            "seller_name": seller_name, # Added
-            "seller_rating": seller_rating, # Added
-            "seller_review_count": seller_review_count, # Added (likely None)
+            "seller_name": seller_name,
+            "seller_rating": seller_rating,
+            "seller_review_count": seller_review_count,
         }
 
     def extract_data_fallback(self, html: str) -> Dict:
@@ -90,7 +95,7 @@ class MeeshoScraper(BaseScraper):
         soup = BeautifulSoup(html, 'lxml')
 
         title = None
-        title_selectors = ['h1']
+        title_selectors = ['h1', 'span.NewProductCard__ProductTitle_pdp-sc']
         for selector in title_selectors:
              title = soup.select_one(selector)
              if title: break
@@ -98,7 +103,7 @@ class MeeshoScraper(BaseScraper):
 
         price = None
         price_text_raw = ""
-        price_selectors = ['h4', 'h4.sc-eDV5Ve', 'h4[class*="Price__PriceValue"]']
+        price_selectors = ['h4[class*="Price__PriceValue"]', 'h4.sc-eDV5Ve', 'h4', '.NewProductCard__PriceRow-sc']
         for selector in price_selectors:
              price = soup.select_one(selector)
              if price:
@@ -111,7 +116,7 @@ class MeeshoScraper(BaseScraper):
                 price_text = price_match.group(1)
 
         image = None
-        image_selectors = ['img.AviImage_ImageWrapper-sc-1055enk-0', 'div[class*="ProductDesktopImage"] img', 'picture img']
+        image_selectors = ['img.AviImage_ImageWrapper-sc-1055enk-0', 'div[class*="ProductDesktopImage"] img', 'picture img', 'img.NewProductCard__Image-sc']
         for selector in image_selectors:
             image = soup.select_one(selector)
             if image:
@@ -120,22 +125,21 @@ class MeeshoScraper(BaseScraper):
         image_url = image.get('src', '') if image and image.get('src', '').startswith('http') else ""
 
         description = None
-        description_selectors = ['div[class*="ProductDescription__DescriptionContainer"]', 'div.content']
+        description_selectors = ['div[class*="ProductDescription__DescriptionContainer"]', 'div.content', 'div.ProductDescription-sc']
         for selector in description_selectors:
             description = soup.select_one(selector)
             if description and description.get_text().strip(): break
         description_text = description.get_text().strip() if description else ""
 
-        # --- NEW: Seller Info Fallback ---
         seller_name = None
         seller_rating = None
         seller_review_count = None
         try:
-            seller_elem = soup.select_one('div[class*="ShopDetails"] p[class*="ShopName"]')
+            seller_elem = soup.select_one('div[class*="ShopDetails"] p[class*="ShopName"], .ProductSellerInformation__Name-sc')
             if seller_elem:
                 seller_name = seller_elem.get_text().strip()
 
-            rating_elem = soup.select_one('div[class*="ShopDetails"] span[class*="Rating"]')
+            rating_elem = soup.select_one('div[class*="ShopDetails"] span[class*="Rating"], .ProductSellerInformation__Rating-sc')
             if rating_elem:
                 rating_text = rating_elem.get_text().strip()
                 rating_match = re.search(r'([\d\.]+)', rating_text)
@@ -143,7 +147,6 @@ class MeeshoScraper(BaseScraper):
                     seller_rating = f"{rating_match.group(1)} Stars"
         except Exception as e:
              print(f"[Meesho Fallback] Could not extract seller details: {e}")
-        # --- End of Seller Info Fallback ---
 
 
         return {
@@ -155,7 +158,7 @@ class MeeshoScraper(BaseScraper):
             "url": self.url,
             "image_url": image_url,
             "description": description_text,
-            "seller_name": seller_name, # Added
-            "seller_rating": seller_rating, # Added
-            "seller_review_count": seller_review_count, # Added (likely None)
+            "seller_name": seller_name,
+            "seller_rating": seller_rating,
+            "seller_review_count": seller_review_count,
         }
