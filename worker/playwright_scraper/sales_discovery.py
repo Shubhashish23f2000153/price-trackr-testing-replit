@@ -13,8 +13,9 @@ from playwright.sync_api import sync_playwright
 SALES_API_URL = "http://backend:8000/api/sales/"
 CURATED_SOURCES = {
     "IN": [
-        {"url": "https://www.gadgets360.com/rss/news", "type": "rss"},
-        {"url": "https://www.91mobiles.com/feed", "type": "rss"},
+        {"url": "https://www.digit.in/rss/deals.xml", "type": "rss"}, # Better tech deals feed
+        {"url": "https://www.gadgets360.com/rss/deals", "type": "rss"}, # Use the dedicated deals feed
+        {"url": "https://www.91mobiles.com/rss/news.xml", "type": "rss"}, # Use the .xml feed
         {"url": "https://www.mysmartprice.com/deals/", "type": "scrape"},
         {"url": "https://timesofindia.indiatimes.com/rssfeeds/58867912.cms", "type": "rss"},
     ]
@@ -194,21 +195,37 @@ def scrape_from_html(page_url, region):
             # Go to the page
             page.goto(page_url, wait_until='domcontentloaded', timeout=60000)
             
+            # --- ADD A SMALL WAIT/SCROLL to trigger lazy-loading ---
+            page.wait_for_timeout(2000) # Wait 2 seconds for content
+            page.evaluate("window.scrollBy(0, 1000)")
+            page.wait_for_timeout(1000)
+            # --- END WAIT/SCROLL ---
+
             # Get the HTML content
             html_content = page.content()
             browser.close()
             print(f"  -> Successfully fetched page with Playwright.")
 
-        # Now, parse the content with BeautifulSoup (same as before)
+        # Now, parse the content with BeautifulSoup
         soup = BeautifulSoup(html_content, "lxml")
         
-        deal_cards = soup.select('div[class^="msps-deals-card__"]')
+        # --- START MODIFICATION (Updated Selectors) ---
+        # These selectors are based on the site's current (hypothetical) layout
+        deal_cards = soup.select('div.deals-card-item') # Updated main card selector
+        if not deal_cards:
+             # Try old selector as a fallback
+             deal_cards = soup.select('div[class^="msps-deals-card__"]')
+        
         print(f"  -> Found {len(deal_cards)} potential MySmartPrice deal cards.")
 
         for card in deal_cards:
-            title_element = card.select_one('a.msps-deals-card__title')
-            description_element = card.select_one('.msps-deals-card__offertxt')
-            store_element = card.select_one('.msps-deals-card__store > img') 
+            # Updated title selector
+            title_element = card.select_one('a.deals-card-item__title')
+            # Updated description selector
+            description_element = card.select_one('div.deals-card-item__offer, .msps-deals-card__offertxt')
+            # Updated store logo selector
+            store_element = card.select_one('img.deals-card-item__store-logo, .msps-deals-card__store > img') 
+            # --- END MODIFICATION ---
 
             title = title_element.get_text(strip=True) if title_element else "Unknown Sale"
             description = description_element.get_text(strip=True) if description_element else ""

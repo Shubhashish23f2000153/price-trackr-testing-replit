@@ -150,7 +150,7 @@ def scrape_and_save_product(url: str, product_id: int, source_id: int):
                 print(f"[Worker] Linked ProductSource {source_id} to Seller {seller.id} ({seller.seller_name})")
             # --- END SELLER LOGIC ---
 
-            # --- NEW: CHECK IF PRICE CHANGED ---
+            # --- CHECK IF PRICE CHANGED (FOR LOGGING ONLY) ---
             last_price_log = db.query(PriceLog).filter(
                 PriceLog.product_source_id == source_id
             ).order_by(desc(PriceLog.scraped_at)).first()
@@ -158,20 +158,26 @@ def scrape_and_save_product(url: str, product_id: int, source_id: int):
             new_price_cents = data.get("price", 0)
             
             if last_price_log and last_price_log.price_cents == new_price_cents:
-                print(f"[Worker] Price for {product_id} is unchanged (₹{new_price_cents / 100}). Skipping log entry.")
-                # We still might want to update product info
+                print(f"[Worker] Price for {product_id} is unchanged (₹{new_price_cents / 100}). Logging anyway for history.")
             else:
-                print(f"[Worker] Price changed (or is new). Old: {last_price_log.price_cents if last_price_log else 'N/A'}, New: {new_price_cents}. Saving new log.")
-                # Step 1: Create the new PriceLog (columns removed)
-                new_price_log = PriceLog(
-                    product_source_id=source_id,
-                    price_cents=new_price_cents,
-                    currency=data.get("currency", "INR"),
-                    availability=data.get("availability", "Unknown"),
-                    in_stock=data.get("in_stock", True),
-                    avg_review_sentiment=avg_sentiment_score # Save calculated sentiment
-                )
-                db.add(new_price_log)
+                last_price_cents = last_price_log.price_cents if last_price_log else 'N/A'
+                print(f"[Worker] Price changed (or is new). Old: {last_price_cents}, New: {new_price_cents}. Saving new log.")
+            
+            # --- START CORRECTION ---
+            # These lines are now OUTSIDE the if/else block, so they
+            # will run every single time, fixing the UnboundLocalError.
+
+            # Step 1: Create the new PriceLog
+            new_price_log = PriceLog(
+                product_source_id=source_id,
+                price_cents=new_price_cents,
+                currency=data.get("currency", "INR"),
+                availability=data.get("availability", "Unknown"),
+                in_stock=data.get("in_stock", True),
+                avg_review_sentiment=avg_sentiment_score # Save calculated sentiment
+            )
+            db.add(new_price_log)
+            # --- END CORRECTION ---
             
             # Step 2: Update the main Product entry (if needed)
             product = db.query(Product).filter(Product.id == product_id).first()
