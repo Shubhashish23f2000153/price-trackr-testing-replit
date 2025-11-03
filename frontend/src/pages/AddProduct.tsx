@@ -31,6 +31,14 @@ export default function AddProduct() {
     { name: "Amazon India", domain: "amazon.in", supported: true },
     { name: "Flipkart", domain: "flipkart.com", supported: true },
     { name: "Myntra", domain: "myntra.com", supported: true },
+    { name: "Amazon (US)", domain: "amazon.com", supported: true },
+    { name: "Best Buy (US)", domain: "bestbuy.com", supported: true },
+    { name: "Vijay Sales", domain: "vijaysales.com", supported: true },
+    { name: "Amazon (UK)", domain: "amazon.co.uk", supported: true },
+    { name: "Amazon (CA)", domain: "amazon.ca", supported: true },
+    { name: "Best Buy (CA)", domain: "bestbuy.ca", supported: true },
+    { name: "Rakuten (JP)", domain: "rakuten.co.jp", supported: true },
+    { name: "JD.com (CN)", domain: "jd.com", supported: true },
     { name: "Snapdeal", domain: "snapdeal.com", supported: true },
     { name: "Meesho", domain: "meesho.com", supported: true }
   ];

@@ -61,3 +61,9 @@ class ProductDetail(ProductResponse):
 # --- NEW EXPORT SCHEMA (Added at the end) ---
 class ProductWithHistorySchema(ProductResponse):
     price_history: List[PriceHistory] = []
+
+
+# --- CLASS FOR REPLACE ENDPOINT ---
+class ProductReplace(BaseModel):
+    old_product_id: int
+    new_url: str

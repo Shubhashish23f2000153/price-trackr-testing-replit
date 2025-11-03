@@ -1,9 +1,9 @@
 # backend/app/api/cron.py
 from fastapi import APIRouter, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
-# --- 1. Import SessionLocal ---
+# --- 1. Import SessionLocal AND Source model ---
 from ..database import get_db, SessionLocal
-from ..models import ProductSource
+from ..models import ProductSource, Source
 from ..utils.scraper_queue import (
     enqueue_scrape, 
     enqueue_alert_check, 
@@ -19,9 +19,18 @@ def run_all_scrapes():
     
     # --- 3. Create a new session inside the task ---
     with SessionLocal() as db:
-        all_product_sources = db.query(ProductSource).all()
+        
+        # --- THIS IS THE "MEESHO SOUVENIR" FIX ---
+        # We join with the Source table and filter out 'meesho.com'
+        all_product_sources = db.query(ProductSource).join(
+            Source, ProductSource.source_id == Source.id
+        ).filter(
+            Source.domain != 'meesho.com'
+        ).all()
+        # --- END OF FIX ---
+        
         # This print statement will now appear in your backend logs
-        print(f"Found {len(all_product_sources)} products to re-scrape.")
+        print(f"Found {len(all_product_sources)} products to re-scrape. (Ignoring meesho.com)")
         for ps in all_product_sources:
             try:
                 enqueue_scrape(ps.url, ps.product_id, ps.id)

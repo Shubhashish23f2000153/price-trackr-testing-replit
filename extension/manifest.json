@@ -9,12 +9,21 @@
     "scripting"
   ],
   "host_permissions": [
+    "http://localhost:8000/",
     "*://*.amazon.in/*",
     "*://*.flipkart.com/*",
     "*://*.myntra.com/*",
     "*://*.snapdeal.com/*",
     "*://*.meesho.com/*",
-    "http://localhost:8000/"
+    "*://*.vijaysales.com/*",
+    "*://*.amazon.com/*",
+    "*://*.amazon.co.uk/*",
+    "*://*.amazon.ca/*",
+    "*://*.bestbuy.com/*",
+    "*://*.bestbuy.ca/*",
+    "*://*.rakuten.co.jp/*",
+    "*://*.yodobashi.com/*",
+    "*://*.jd.com/*"
   ],
   "action": {
     "default_popup": "popup/popup.html"
@@ -42,6 +51,42 @@
     {
       "matches": ["*://*.meesho.com/*"],
       "js": ["scrapers/meesho.js"]
+    },
+    {
+      "matches": ["*://*.vijaysales.com/*"],
+      "js": ["scrapers/vijaysales.js"]
+    },
+    {
+      "matches": ["*://*.amazon.com/*"],
+      "js": ["scrapers/amazon_com.js"]
+    },
+    {
+      "matches": ["*://*.amazon.co.uk/*"],
+      "js": ["scrapers/amazon_uk.js"]
+    },
+    {
+      "matches": ["*://*.amazon.ca/*"],
+      "js": ["scrapers/amazon_ca.js"]
+    },
+    {
+      "matches": ["*://*.bestbuy.com/*"],
+      "js": ["scrapers/bestbuy.js"]
+    },
+    {
+      "matches": ["*://*.bestbuy.ca/*"],
+      "js": ["scrapers/bestbuy_ca.js"]
+    },
+    {
+      "matches": ["*://*.rakuten.co.jp/*"],
+      "js": ["scrapers/rakuten.js"]
+    },
+    {
+      "matches": ["*://*.yodobashi.com/*"],
+      "js": ["scrapers/yodobashi.js"]
+    },
+    {
+      "matches": ["*://*.jd.com/*"],
+      "js": ["scrapers/jd.js"]
     }
   ]
 }

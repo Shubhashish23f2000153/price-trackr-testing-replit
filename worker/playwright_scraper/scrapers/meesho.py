@@ -9,10 +9,10 @@ class MeeshoScraper(BaseScraper):
     def extract_data(self, page: Page) -> Dict:
         """Extract data using Playwright"""
         
-        # --- ADD A WAIT for the price to appear ---
+        # --- 1. INCREASED TIMEOUT to 20 seconds ---
         try:
             price_selector_to_wait = 'h4[class*="Price__PriceValue"], h4.sc-eDV5Ve, .NewProductCard__PriceRow-sc'
-            page.wait_for_selector(price_selector_to_wait, timeout=10000)
+            page.wait_for_selector(price_selector_to_wait, timeout=20000)
         except Exception as e:
             print(f"[Meesho Scraper] Timed out waiting for price element: {e}")
             # Continue anyway, maybe it's there
@@ -22,17 +22,16 @@ class MeeshoScraper(BaseScraper):
         title_selectors = ['h1', 'span.NewProductCard__ProductTitle_pdp-sc']
         for selector in title_selectors:
             try:
-                title = page.locator(selector).first.inner_text(timeout=5000).strip()
+                title = page.locator(selector).first.inner_text(timeout=10000).strip()
                 if title: break
             except: continue
         if not title: title = "Unknown Product"
 
         price_text = ""
-        # --- ADDED MORE SELECTORS ---
         price_selectors = ['h4[class*="Price__PriceValue"]', 'h4.sc-eDV5Ve', 'h4', '.NewProductCard__PriceRow-sc']
         for selector in price_selectors:
             try:
-                full_price_text = page.locator(selector).first.inner_text(timeout=5000).strip()
+                full_price_text = page.locator(selector).first.inner_text(timeout=10000).strip()
                 price_match = re.search(r'₹?([\d,]+)', full_price_text)
                 if price_match and price_match.group(1):
                     price_text = price_match.group(1)
@@ -44,37 +43,31 @@ class MeeshoScraper(BaseScraper):
         for selector in image_selectors:
             try:
                 img_element = page.locator(selector).first
-                src = img_element.get_attribute('src', timeout=5000)
+                src = img_element.get_attribute('src', timeout=10000)
                 if src and src.startswith('http'):
                     image_url = src
                     break
             except: continue
 
+        # --- 2. REMOVED DESCRIPTION SCRAPING (it's slow and fails) ---
         description = ""
-        description_selectors = ['div[class*="ProductDescription__DescriptionContainer"]', 'div.content', 'div.ProductDescription-sc']
-        for selector in description_selectors:
-            try:
-                desc_element = page.locator(selector).first
-                description = desc_element.inner_text(timeout=5000).strip()
-                if description: break
-            except: continue
 
         seller_name = None
         seller_rating = None
         seller_review_count = None
         try:
+            # --- 3. SIMPLIFIED SELLER LOGIC (faster) ---
             seller_elem = page.locator('div[class*="ShopDetails"] p[class*="ShopName"], .ProductSellerInformation__Name-sc').first
-            if seller_elem:
-                seller_name = seller_elem.inner_text().strip()
+            seller_name = seller_elem.inner_text(timeout=5000).strip()
 
             rating_elem = page.locator('div[class*="ShopDetails"] span[class*="Rating"], .ProductSellerInformation__Rating-sc').first
-            if rating_elem:
-                 rating_text = rating_elem.inner_text().strip()
-                 rating_match = re.search(r'([\d\.]+)', rating_text)
-                 if rating_match:
-                     seller_rating = f"{rating_match.group(1)} Stars"
+            rating_text = rating_elem.inner_text(timeout=5000).strip()
+            rating_match = re.search(r'([\d\.]+)', rating_text)
+            if rating_match:
+                seller_rating = f"{rating_match.group(1)} Stars"
         except Exception as e:
-            print(f"[Meesho Scraper] Could not extract seller details: {e}")
+            # This is not critical, so we just print a warning
+            print(f"[Meesho Scraper] Could not extract seller details (non-critical): {e}")
 
         return {
             "title": title,
@@ -84,7 +77,7 @@ class MeeshoScraper(BaseScraper):
             "in_stock": True,
             "url": self.url,
             "image_url": image_url,
-            "description": description,
+            "description": description, # Will be empty
             "seller_name": seller_name,
             "seller_rating": seller_rating,
             "seller_review_count": seller_review_count,
@@ -124,12 +117,8 @@ class MeeshoScraper(BaseScraper):
                  if src and src.startswith('http'): break
         image_url = image.get('src', '') if image and image.get('src', '').startswith('http') else ""
 
-        description = None
-        description_selectors = ['div[class*="ProductDescription__DescriptionContainer"]', 'div.content', 'div.ProductDescription-sc']
-        for selector in description_selectors:
-            description = soup.select_one(selector)
-            if description and description.get_text().strip(): break
-        description_text = description.get_text().strip() if description else ""
+        # --- REMOVED DESCRIPTION FALLBACK ---
+        description_text = ""
 
         seller_name = None
         seller_rating = None
@@ -146,7 +135,7 @@ class MeeshoScraper(BaseScraper):
                 if rating_match:
                     seller_rating = f"{rating_match.group(1)} Stars"
         except Exception as e:
-             print(f"[Meesho Fallback] Could not extract seller details: {e}")
+             print(f"[Meesho Fallback] Could not extract seller details {e}")
 
 
         return {

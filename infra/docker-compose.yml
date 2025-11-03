@@ -60,11 +60,15 @@ services:
       - pricetrackr-network
     restart: unless-stopped
 
-  worker:
+  # --- WORKER GROUP 1: FAST PRODUCT SCRAPES ---
+  # (You can scale this one up by changing 'deploy.replicas')
+  worker_products:
     build:
       context: ../worker
       dockerfile: Dockerfile
-    container_name: pricetrackr-worker
+    container_name: pricetrackr-worker-products
+    # This command tells it to ONLY listen to the fast queues
+    command: python -m rq worker scraping alerts scam_checks -c playwright_scraper.runner
     env_file: ./.env
     volumes:                 
       - ../worker:/app       
@@ -72,9 +76,35 @@ services:
       REDIS_URL: redis://redis:6379/0
       DATABASE_URL: postgresql://${POSTGRES_USER:-pricetrackr}:${POSTGRES_PASSWORD:-testpassword}@postgres:5432/${POSTGRES_DB:-pricetrackr} 
       PYTHONPATH: /app
-      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
-      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
-      VAPID_CLAIMS_EMAIL: ${VAPID_CLAIMS_EMAIL}         
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-3} # Concurrency setting
+    deploy:
+      replicas: 1 # Start with 1, you can increase this number to 2 or 3
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - pricetrackr-network
+    restart: unless-stopped
+
+  # --- WORKER GROUP 2: SLOW BACKGROUND TASKS ---
+  # (This one runs sales discovery and data aggregation)
+  worker_longtasks:
+    build:
+      context: ../worker
+      dockerfile: Dockerfile
+    container_name: pricetrackr-worker-longtasks
+    # This command tells it to ONLY listen to the slow queues
+    command: python -m rq worker sales_discovery aggregation -c playwright_scraper.runner
+    env_file: ./.env
+    volumes:                 
+      - ../worker:/app       
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: postgresql://${POSTGRES_USER:-pricetrackr}:${POSTGRES_PASSWORD:-testpassword}@postgres:5432/${POSTGRES_DB:-pricetrackr} 
+      PYTHONPATH: /app
+      WORKER_CONCURRENCY: 1 # Only one worker for these heavy tasks
     depends_on:
       redis:
         condition: service_healthy
@@ -88,11 +118,8 @@ services:
     build:
       context: ../frontend
       dockerfile: Dockerfile
-      # --- THIS IS THE SYNTAX CHANGE ---
-      # Use dictionary format for args
       args:
         VITE_VAPID_PUBLIC_KEY: ${VITE_VAPID_PUBLIC_KEY}
-    # This path assumes .env is in the infra/ folder
     env_file: ./.env 
     container_name: pricetrackr-frontend
     ports:

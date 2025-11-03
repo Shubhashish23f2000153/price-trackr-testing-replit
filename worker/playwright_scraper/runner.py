@@ -399,18 +399,12 @@ def run_aggregation_job():
 
 
 # --- Main Worker Execution ---
-if __name__ == "__main__":
-    # Create queues
-    scraper_queue = Queue("scraping", connection=redis_conn)
-    scam_queue = Queue("scam_checks", connection=redis_conn)
-    alert_queue = Queue("alerts", connection=redis_conn)
-    sales_queue = Queue("sales_discovery", connection=redis_conn)
-    aggregate_queue = Queue("aggregation", connection=redis_conn)
-
-    # Start worker for all queues
-    worker = Worker(
-        [scraper_queue, scam_queue, alert_queue, sales_queue, aggregate_queue],
-        connection=redis_conn
-    )
-    print("🚀 Scraper worker started... Listening for jobs on 'scraping', 'scam_checks', 'alerts', 'sales_discovery', and 'aggregation'.")
-    worker.work()
+def run_aggregation_job():
+    """Worker task to run daily and monthly aggregations."""
+    print("[Worker] Running price aggregation job...")
+    try:
+        from .aggregation import run_aggregation_jobs
+        run_aggregation_jobs()
+        print("[Worker] ✅ Price aggregation job complete.")
+    except Exception as e:
+        print(f"[Worker] ❌ CRITICAL ERROR in price aggregation: {e}\n{traceback.format_exc()}")
